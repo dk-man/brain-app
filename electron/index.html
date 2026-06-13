@@ -3,49 +3,358 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hello World</title>
+    <title>Brain</title>
     <style>
       :root {
         color-scheme: light dark;
+        --bg: #ffffff;
+        --bg-elev: #f5f5f7;
+        --bg-sidebar: #fafafa;
+        --border: rgba(0, 0, 0, 0.08);
+        --text: #1d1d1f;
+        --text-muted: #86868b;
+        --accent: #0071e3;
+        --selected: rgba(0, 113, 227, 0.08);
+        --hover: rgba(0, 0, 0, 0.04);
       }
-      html,
-      body {
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e1e1e;
+          --bg-elev: #252525;
+          --bg-sidebar: #1a1a1a;
+          --border: rgba(255, 255, 255, 0.08);
+          --text: #f5f5f7;
+          --text-muted: #8e8e93;
+          --accent: #0a84ff;
+          --selected: rgba(10, 132, 255, 0.15);
+          --hover: rgba(255, 255, 255, 0.05);
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body {
         margin: 0;
         padding: 0;
         height: 100%;
-        font-family:
-          -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-          system-ui, sans-serif;
-        background: #0b0b0f;
-        color: #f5f5f7;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+        font-size: 14px;
+        color: var(--text);
+        background: var(--bg);
+        -webkit-font-smoothing: antialiased;
+        overflow: hidden;
       }
-      main {
+      #app {
+        display: grid;
+        grid-template-columns: 220px 260px 1fr;
+        height: 100vh;
+      }
+      .pane {
+        height: 100%;
+        overflow-y: auto;
+        border-right: 1px solid var(--border);
+      }
+      .pane:last-child { border-right: none; }
+      .sidebar {
+        background: var(--bg-sidebar);
+        padding: 56px 8px 16px;
+      }
+      .list-pane {
+        background: var(--bg-elev);
+        padding: 56px 0 0;
+      }
+      .editor-pane {
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+      }
+      .section-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        padding: 8px 12px 4px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text);
+        user-select: none;
+      }
+      .nav-item:hover { background: var(--hover); }
+      .nav-item.active { background: var(--selected); color: var(--accent); font-weight: 500; }
+      .nav-item .count { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+      .nav-item .dot {
+        width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      }
+      .list-header {
+        padding: 0 16px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .list-title {
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .icon-btn {
+        background: none;
+        border: none;
+        width: 28px; height: 28px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--text-muted);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px;
+        transition: background 0.15s;
+      }
+      .icon-btn:hover { background: var(--hover); color: var(--text); }
+      .file-item {
+        padding: 10px 16px;
+        border-top: 1px solid var(--border);
+        cursor: pointer;
+        user-select: none;
+      }
+      .file-item:hover { background: var(--hover); }
+      .file-item.active { background: var(--selected); }
+      .file-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .file-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .file-meta .date { margin-right: 6px; }
+      .editor-toolbar {
+        height: 56px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        gap: 8px;
+        -webkit-app-region: drag;
+      }
+      .editor-toolbar > * { -webkit-app-region: no-drag; }
+      .editor-toolbar .spacer { flex: 1; }
+      .title-input {
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        width: 100%;
+        padding: 24px 40px 8px;
+        font-family: inherit;
+      }
+      .body-input {
+        flex: 1;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        padding: 8px 40px 40px;
+        font-size: 15px;
+        line-height: 1.6;
+        font-family: inherit;
+        resize: none;
+        white-space: pre-wrap;
+      }
+      .empty {
+        flex: 1;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 100vh;
-        text-align: center;
-        padding: 2rem;
+        color: var(--text-muted);
+        font-size: 14px;
       }
-      h1 {
-        font-size: clamp(2.5rem, 6vw, 4.5rem);
-        font-weight: 600;
-        letter-spacing: -0.02em;
-        margin: 0;
-      }
-      p {
-        margin-top: 1rem;
-        color: #a1a1aa;
-        font-size: 1rem;
-      }
+      .traffic-light-pad { height: 28px; }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+      .pane:hover ::-webkit-scrollbar-thumb { background: var(--border); }
     </style>
   </head>
   <body>
-    <main>
-      <div>
-        <h1>Hello, World <span aria-hidden="true">👋</span></h1>
-        <p>Your standalone Mac app is up and running.</p>
-      </div>
-    </main>
+    <div id="app">
+      <aside class="pane sidebar" id="sidebar"></aside>
+      <section class="pane list-pane">
+        <div class="traffic-light-pad"></div>
+        <div class="list-header">
+          <div class="list-title" id="listTitle">All Notes</div>
+          <button class="icon-btn" id="newBtn" title="New note">+</button>
+        </div>
+        <div id="fileList"></div>
+      </section>
+      <section class="pane editor-pane" id="editorPane">
+        <div class="editor-toolbar">
+          <div class="spacer"></div>
+          <button class="icon-btn" id="deleteBtn" title="Delete">×</button>
+        </div>
+        <div id="editorContent" class="empty">Select a note</div>
+      </section>
+    </div>
+
+    <script>
+      const STORAGE_KEY = "brain.notes.v1";
+      const CATEGORIES = [
+        { id: "work", name: "Work", color: "#0071e3" },
+        { id: "hobbies", name: "Hobbies", color: "#34c759" },
+        { id: "shopping", name: "Shopping", color: "#ff9500" },
+      ];
+
+      const SEED = [
+        { id: "n1", category: "work", title: "Q3 Priorities",
+          body: "Top focus areas for the quarter:\n\n• Ship onboarding redesign\n• Hire one senior engineer\n• Cut p95 latency by 30%\n\nReview every Friday." },
+        { id: "n2", category: "work", title: "Meeting Notes — Kickoff",
+          body: "Attendees: A, B, C\n\nDecisions:\n— Launch target: Sep 15\n— Owner: me\n— Weekly sync on Tuesdays" },
+        { id: "n3", category: "hobbies", title: "Reading List",
+          body: "1. The Pragmatic Programmer\n2. Steal Like an Artist\n3. The Creative Act — Rick Rubin\n4. A Pattern Language" },
+        { id: "n4", category: "hobbies", title: "Sourdough Schedule",
+          body: "Friday evening — feed starter\nSaturday morning — mix dough\nSaturday afternoon — bulk + fold\nSunday morning — bake at 250°C" },
+        { id: "n5", category: "shopping", title: "Groceries",
+          body: "□ Eggs\n□ Spinach\n□ Olive oil\n□ Greek yogurt\n□ Coffee beans\n□ Lemons" },
+        { id: "n6", category: "shopping", title: "Hardware Store",
+          body: "□ 3M command strips\n□ AA batteries\n□ LED bulb (E27, warm white)\n□ Picture hooks" },
+      ];
+
+      function load() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch {}
+        const seeded = SEED.map((n, i) => ({ ...n, updatedAt: Date.now() - i * 86400000 }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+        return seeded;
+      }
+      function save(notes) { localStorage.setItem(STORAGE_KEY, JSON.stringify(notes)); }
+
+      let notes = load();
+      let activeCategory = "all";
+      let activeId = notes[0]?.id || null;
+
+      const $ = (id) => document.getElementById(id);
+
+      function renderSidebar() {
+        const counts = { all: notes.length };
+        CATEGORIES.forEach(c => counts[c.id] = notes.filter(n => n.category === c.id).length);
+        const html = `
+          <div class="section-label">Library</div>
+          <div class="nav-item ${activeCategory === 'all' ? 'active' : ''}" data-cat="all">
+            <span class="dot" style="background:#8e8e93"></span>
+            <span>All Notes</span>
+            <span class="count">${counts.all}</span>
+          </div>
+          <div class="section-label" style="margin-top:12px">Categories</div>
+          ${CATEGORIES.map(c => `
+            <div class="nav-item ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
+              <span class="dot" style="background:${c.color}"></span>
+              <span>${c.name}</span>
+              <span class="count">${counts[c.id]}</span>
+            </div>`).join("")}
+        `;
+        $("sidebar").innerHTML = html;
+        $("sidebar").querySelectorAll(".nav-item").forEach(el => {
+          el.onclick = () => { activeCategory = el.dataset.cat; render(); };
+        });
+      }
+
+      function visibleNotes() {
+        const list = activeCategory === "all" ? notes : notes.filter(n => n.category === activeCategory);
+        return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
+      }
+
+      function renderList() {
+        const list = visibleNotes();
+        $("listTitle").textContent = activeCategory === "all"
+          ? "All Notes"
+          : CATEGORIES.find(c => c.id === activeCategory).name;
+        $("fileList").innerHTML = list.map(n => {
+          const preview = (n.body || "").split("\n").find(l => l.trim()) || "No additional text";
+          const date = new Date(n.updatedAt);
+          const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+          return `
+            <div class="file-item ${n.id === activeId ? 'active' : ''}" data-id="${n.id}">
+              <div class="file-name">${escapeHtml(n.title || "Untitled")}</div>
+              <div class="file-meta"><span class="date">${dateStr}</span>${escapeHtml(preview.slice(0, 60))}</div>
+            </div>`;
+        }).join("");
+        $("fileList").querySelectorAll(".file-item").forEach(el => {
+          el.onclick = () => { activeId = el.dataset.id; render(); };
+        });
+      }
+
+      function renderEditor() {
+        const note = notes.find(n => n.id === activeId);
+        const pane = $("editorContent");
+        if (!note) {
+          pane.className = "empty";
+          pane.textContent = "Select a note";
+          return;
+        }
+        pane.className = "";
+        pane.style.display = "flex";
+        pane.style.flexDirection = "column";
+        pane.style.flex = "1";
+        pane.style.minHeight = "0";
+        pane.innerHTML = `
+          <input class="title-input" id="titleInput" value="${escapeHtml(note.title)}" placeholder="Title" />
+          <textarea class="body-input" id="bodyInput" placeholder="Start writing…">${escapeHtml(note.body)}</textarea>
+        `;
+        $("titleInput").oninput = (e) => updateNote({ title: e.target.value });
+        $("bodyInput").oninput = (e) => updateNote({ body: e.target.value });
+      }
+
+      function updateNote(patch) {
+        const i = notes.findIndex(n => n.id === activeId);
+        if (i < 0) return;
+        notes[i] = { ...notes[i], ...patch, updatedAt: Date.now() };
+        save(notes);
+        renderList();
+      }
+
+      function newNote() {
+        const cat = activeCategory === "all" ? "work" : activeCategory;
+        const note = { id: "n" + Date.now(), category: cat, title: "Untitled", body: "", updatedAt: Date.now() };
+        notes.push(note);
+        activeId = note.id;
+        save(notes);
+        render();
+        setTimeout(() => { const t = $("titleInput"); if (t) { t.focus(); t.select(); } }, 0);
+      }
+
+      function deleteNote() {
+        if (!activeId) return;
+        notes = notes.filter(n => n.id !== activeId);
+        activeId = visibleNotes()[0]?.id || null;
+        save(notes);
+        render();
+      }
+
+      function escapeHtml(s) {
+        return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      }
+
+      function render() { renderSidebar(); renderList(); renderEditor(); }
+
+      $("newBtn").onclick = newNote;
+      $("deleteBtn").onclick = deleteNote;
+      render();
+    </script>
   </body>
 </html>
