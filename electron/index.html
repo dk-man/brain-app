@@ -204,6 +204,7 @@
       <section class="pane editor-pane" id="editorPane">
         <div class="editor-toolbar">
           <div class="spacer"></div>
+          <button class="icon-btn" id="revealBtn" title="Reveal in Finder">⤴</button>
           <button class="icon-btn" id="deleteBtn" title="Delete">×</button>
         </div>
         <div id="editorContent" class="empty">Select a note</div>
@@ -211,44 +212,33 @@
     </div>
 
     <script>
-      const STORAGE_KEY = "brain.notes.v1";
       const CATEGORIES = [
-        { id: "work", name: "Work", color: "#0071e3" },
-        { id: "hobbies", name: "Hobbies", color: "#34c759" },
-        { id: "shopping", name: "Shopping", color: "#ff9500" },
+        { id: "Work", name: "Work", color: "#0071e3" },
+        { id: "Hobbies", name: "Hobbies", color: "#34c759" },
+        { id: "Shopping", name: "Shopping", color: "#ff9500" },
       ];
 
-      const SEED = [
-        { id: "n1", category: "work", title: "Q3 Priorities",
-          body: "Top focus areas for the quarter:\n\n• Ship onboarding redesign\n• Hire one senior engineer\n• Cut p95 latency by 30%\n\nReview every Friday." },
-        { id: "n2", category: "work", title: "Meeting Notes — Kickoff",
-          body: "Attendees: A, B, C\n\nDecisions:\n— Launch target: Sep 15\n— Owner: me\n— Weekly sync on Tuesdays" },
-        { id: "n3", category: "hobbies", title: "Reading List",
-          body: "1. The Pragmatic Programmer\n2. Steal Like an Artist\n3. The Creative Act — Rick Rubin\n4. A Pattern Language" },
-        { id: "n4", category: "hobbies", title: "Sourdough Schedule",
-          body: "Friday evening — feed starter\nSaturday morning — mix dough\nSaturday afternoon — bulk + fold\nSunday morning — bake at 250°C" },
-        { id: "n5", category: "shopping", title: "Groceries",
-          body: "□ Eggs\n□ Spinach\n□ Olive oil\n□ Greek yogurt\n□ Coffee beans\n□ Lemons" },
-        { id: "n6", category: "shopping", title: "Hardware Store",
-          body: "□ 3M command strips\n□ AA batteries\n□ LED bulb (E27, warm white)\n□ Picture hooks" },
-      ];
-
-      function load() {
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (raw) return JSON.parse(raw);
-        } catch {}
-        const seeded = SEED.map((n, i) => ({ ...n, updatedAt: Date.now() - i * 86400000 }));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-        return seeded;
-      }
-      function save(notes) { localStorage.setItem(STORAGE_KEY, JSON.stringify(notes)); }
-
-      let notes = load();
+      const api = window.brainAPI;
+      let notes = []; // { relPath, category, title, updatedAt, body? }
       let activeCategory = "all";
-      let activeId = notes[0]?.id || null;
+      let activeId = null; // relPath
+      let saveTimer = null;
+      let pending = null; // { title, body, category }
 
       const $ = (id) => document.getElementById(id);
+
+      async function init() {
+        await api.seedIfEmpty();
+        await refresh(true);
+      }
+
+      async function refresh(selectFirst) {
+        notes = await api.list();
+        notes.sort((a, b) => b.updatedAt - a.updatedAt);
+        if (selectFirst && !activeId && notes[0]) activeId = notes[0].relPath;
+        if (activeId && !notes.find(n => n.relPath === activeId)) activeId = notes[0]?.relPath || null;
+        await render();
+      }
 
       function renderSidebar() {
         const counts = { all: notes.length };
@@ -265,7 +255,7 @@
             <div class="nav-item ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
               <span class="dot" style="background:${c.color}"></span>
               <span>${c.name}</span>
-              <span class="count">${counts[c.id]}</span>
+              <span class="count">${counts[c.id] || 0}</span>
             </div>`).join("")}
         `;
         $("sidebar").innerHTML = html;
@@ -285,27 +275,31 @@
           ? "All Notes"
           : CATEGORIES.find(c => c.id === activeCategory).name;
         $("fileList").innerHTML = list.map(n => {
-          const preview = (n.body || "").split("\n").find(l => l.trim()) || "No additional text";
           const date = new Date(n.updatedAt);
           const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
           return `
-            <div class="file-item ${n.id === activeId ? 'active' : ''}" data-id="${n.id}">
+            <div class="file-item ${n.relPath === activeId ? 'active' : ''}" data-id="${escapeHtml(n.relPath)}">
               <div class="file-name">${escapeHtml(n.title || "Untitled")}</div>
-              <div class="file-meta"><span class="date">${dateStr}</span>${escapeHtml(preview.slice(0, 60))}</div>
+              <div class="file-meta"><span class="date">${dateStr}</span>${escapeHtml(n.category)}</div>
             </div>`;
         }).join("");
         $("fileList").querySelectorAll(".file-item").forEach(el => {
-          el.onclick = () => { activeId = el.dataset.id; render(); };
+          el.onclick = async () => { await flushPending(); activeId = el.dataset.id; render(); };
         });
       }
 
-      function renderEditor() {
-        const note = notes.find(n => n.id === activeId);
+      async function renderEditor() {
+        const note = notes.find(n => n.relPath === activeId);
         const pane = $("editorContent");
         if (!note) {
           pane.className = "empty";
           pane.textContent = "Select a note";
           return;
+        }
+        let body = note.body;
+        if (body === undefined) {
+          body = await api.read(note.relPath);
+          note.body = body;
         }
         pane.className = "";
         pane.style.display = "flex";
@@ -314,47 +308,84 @@
         pane.style.minHeight = "0";
         pane.innerHTML = `
           <input class="title-input" id="titleInput" value="${escapeHtml(note.title)}" placeholder="Title" />
-          <textarea class="body-input" id="bodyInput" placeholder="Start writing…">${escapeHtml(note.body)}</textarea>
+          <textarea class="body-input" id="bodyInput" placeholder="Start writing…">${escapeHtml(body)}</textarea>
         `;
-        $("titleInput").oninput = (e) => updateNote({ title: e.target.value });
-        $("bodyInput").oninput = (e) => updateNote({ body: e.target.value });
+        $("titleInput").oninput = (e) => queueSave({ title: e.target.value });
+        $("bodyInput").oninput = (e) => queueSave({ body: e.target.value });
       }
 
-      function updateNote(patch) {
-        const i = notes.findIndex(n => n.id === activeId);
-        if (i < 0) return;
-        notes[i] = { ...notes[i], ...patch, updatedAt: Date.now() };
-        save(notes);
-        renderList();
+      function queueSave(patch) {
+        const note = notes.find(n => n.relPath === activeId);
+        if (!note) return;
+        pending = { ...(pending || {}), ...patch, _for: activeId };
+        if (patch.body !== undefined) note.body = patch.body;
+        if (patch.title !== undefined) note.title = patch.title;
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(flushPending, 500);
       }
 
-      function newNote() {
-        const cat = activeCategory === "all" ? "work" : activeCategory;
-        const note = { id: "n" + Date.now(), category: cat, title: "Untitled", body: "", updatedAt: Date.now() };
-        notes.push(note);
-        activeId = note.id;
-        save(notes);
-        render();
+      async function flushPending() {
+        clearTimeout(saveTimer);
+        if (!pending) return;
+        const p = pending; pending = null;
+        const note = notes.find(n => n.relPath === p._for);
+        if (!note) return;
+        try {
+          if (p.body !== undefined) {
+            await api.write(note.relPath, note.body || "");
+          }
+          if (p.title !== undefined && p.title !== note.title.slice(0, 0) /* always */) {
+            const res = await api.rename(note.relPath, note.title, note.category);
+            if (res.relPath !== note.relPath) {
+              if (activeId === note.relPath) activeId = res.relPath;
+              note.relPath = res.relPath;
+              note.title = res.title;
+            }
+          }
+          note.updatedAt = Date.now();
+          renderSidebar();
+          renderList();
+        } catch (err) {
+          console.error("save failed", err);
+        }
+      }
+
+      async function newNote() {
+        await flushPending();
+        const cat = activeCategory === "all" ? "Work" : activeCategory;
+        const res = await api.create(cat, "Untitled", "");
+        await refresh();
+        activeId = res.relPath;
+        await render();
         setTimeout(() => { const t = $("titleInput"); if (t) { t.focus(); t.select(); } }, 0);
       }
 
-      function deleteNote() {
+      async function deleteNote() {
         if (!activeId) return;
-        notes = notes.filter(n => n.id !== activeId);
-        activeId = visibleNotes()[0]?.id || null;
-        save(notes);
-        render();
+        const id = activeId;
+        pending = null;
+        clearTimeout(saveTimer);
+        await api.remove(id);
+        notes = notes.filter(n => n.relPath !== id);
+        activeId = visibleNotes()[0]?.relPath || null;
+        await render();
+      }
+
+      async function reveal() {
+        await api.reveal(activeId || "");
       }
 
       function escapeHtml(s) {
         return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
       }
 
-      function render() { renderSidebar(); renderList(); renderEditor(); }
+      async function render() { renderSidebar(); renderList(); await renderEditor(); }
 
       $("newBtn").onclick = newNote;
       $("deleteBtn").onclick = deleteNote;
-      render();
+      $("revealBtn").onclick = reveal;
+      window.addEventListener("beforeunload", () => { flushPending(); });
+      init();
     </script>
   </body>
 </html>
