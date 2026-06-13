@@ -3,9 +3,13 @@ const path = require("path");
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1024,
-    height: 768,
-    title: "Hello World",
+    width: 1100,
+    height: 720,
+    minWidth: 720,
+    minHeight: 480,
+    title: "Brain",
+    titleBarStyle: "hiddenInset",
+    backgroundColor: "#1e1e1e",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
