@@ -1,9 +1,12 @@
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs/promises");
 const fssync = require("fs");
 
 const CATEGORIES = ["Work", "Hobbies", "Shopping"];
+const TRASH = "Trash";
+const ALL_FOLDERS = [...CATEGORIES, TRASH];
+const TRASH_SEP = "__";
 
 function rootDir() {
   return path.join(app.getPath("documents"), "Brain");
@@ -20,7 +23,7 @@ function sanitize(name) {
 async function ensureDirs() {
   const root = rootDir();
   await fs.mkdir(root, { recursive: true });
-  for (const c of CATEGORIES) {
+  for (const c of ALL_FOLDERS) {
     await fs.mkdir(path.join(root, c), { recursive: true });
   }
 }
@@ -35,6 +38,19 @@ async function uniquePath(dir, base, ext) {
   return candidate;
 }
 
+function parseTrashName(filename) {
+  // "Work__Title.md" -> { originalCategory: "Work", title: "Title" }
+  const base = filename.replace(/\.md$/, "");
+  const idx = base.indexOf(TRASH_SEP);
+  if (idx > 0) {
+    const cat = base.slice(0, idx);
+    if (CATEGORIES.includes(cat)) {
+      return { originalCategory: cat, title: base.slice(idx + TRASH_SEP.length) };
+    }
+  }
+  return { originalCategory: "Work", title: base };
+}
+
 async function listAll() {
   await ensureDirs();
   const root = rootDir();
@@ -42,16 +58,20 @@ async function listAll() {
   const cats = await fs.readdir(root, { withFileTypes: true });
   for (const c of cats) {
     if (!c.isDirectory()) continue;
+    if (!ALL_FOLDERS.includes(c.name)) continue;
     const catDir = path.join(root, c.name);
     const files = await fs.readdir(catDir, { withFileTypes: true });
     for (const f of files) {
       if (!f.isFile() || !f.name.endsWith(".md")) continue;
       const full = path.join(catDir, f.name);
       const stat = await fs.stat(full);
+      const isTrash = c.name === TRASH;
+      const parsed = isTrash ? parseTrashName(f.name) : null;
       entries.push({
         relPath: path.join(c.name, f.name),
         category: c.name,
-        title: f.name.replace(/\.md$/, ""),
+        title: isTrash ? parsed.title : f.name.replace(/\.md$/, ""),
+        originalCategory: isTrash ? parsed.originalCategory : null,
         updatedAt: stat.mtimeMs,
       });
     }
@@ -83,6 +103,86 @@ async function seedIfEmpty() {
     await fs.writeFile(p, n.body, "utf8");
   }
   return true;
+}
+
+async function trashNote(relPath) {
+  const root = rootDir();
+  const oldFull = path.join(root, relPath);
+  const parts = relPath.split(path.sep);
+  const cat = parts[0];
+  if (cat === TRASH) return { relPath };
+  const filename = parts.slice(1).join(path.sep).replace(/\.md$/, "");
+  const newBase = `${CATEGORIES.includes(cat) ? cat : "Work"}${TRASH_SEP}${filename}`;
+  const trashDir = path.join(root, TRASH);
+  await fs.mkdir(trashDir, { recursive: true });
+  const target = await uniquePath(trashDir, newBase, ".md");
+  await fs.rename(oldFull, target);
+  return { relPath: path.relative(root, target) };
+}
+
+async function restoreNote(relPath) {
+  const root = rootDir();
+  const oldFull = path.join(root, relPath);
+  const parts = relPath.split(path.sep);
+  if (parts[0] !== TRASH) return { relPath };
+  const parsed = parseTrashName(parts[parts.length - 1]);
+  const dir = path.join(root, parsed.originalCategory);
+  await fs.mkdir(dir, { recursive: true });
+  const target = await uniquePath(dir, sanitize(parsed.title), ".md");
+  await fs.rename(oldFull, target);
+  return { relPath: path.relative(root, target) };
+}
+
+async function exportAll() {
+  const win = BrowserWindow.getFocusedWindow();
+  const res = await dialog.showSaveDialog(win, {
+    title: "Export Brain",
+    defaultPath: `Brain-export-${new Date().toISOString().slice(0, 10)}.json`,
+    filters: [{ name: "JSON", extensions: ["json"] }],
+  });
+  if (res.canceled || !res.filePath) return { ok: false };
+  const entries = await listAll();
+  const notes = [];
+  for (const e of entries) {
+    const body = await fs.readFile(path.join(rootDir(), e.relPath), "utf8");
+    notes.push({
+      category: e.category,
+      originalCategory: e.originalCategory,
+      title: e.title,
+      body,
+      updatedAt: e.updatedAt,
+    });
+  }
+  await fs.writeFile(res.filePath, JSON.stringify({ version: 1, exportedAt: Date.now(), notes }, null, 2), "utf8");
+  return { ok: true, path: res.filePath, count: notes.length };
+}
+
+async function importAll() {
+  const win = BrowserWindow.getFocusedWindow();
+  const res = await dialog.showOpenDialog(win, {
+    title: "Import Brain",
+    properties: ["openFile"],
+    filters: [{ name: "JSON", extensions: ["json"] }],
+  });
+  if (res.canceled || !res.filePaths?.[0]) return { ok: false };
+  const raw = await fs.readFile(res.filePaths[0], "utf8");
+  const data = JSON.parse(raw);
+  if (!Array.isArray(data?.notes)) throw new Error("Invalid export file");
+  await ensureDirs();
+  let imported = 0;
+  for (const n of data.notes) {
+    const cat = n.category === TRASH ? TRASH : (CATEGORIES.includes(n.category) ? n.category : "Work");
+    const dir = path.join(rootDir(), cat);
+    await fs.mkdir(dir, { recursive: true });
+    const baseTitle = sanitize(n.title || "Untitled");
+    const base = cat === TRASH
+      ? `${CATEGORIES.includes(n.originalCategory) ? n.originalCategory : "Work"}${TRASH_SEP}${baseTitle}`
+      : baseTitle;
+    const target = await uniquePath(dir, base, ".md");
+    await fs.writeFile(target, n.body || "", "utf8");
+    imported++;
+  }
+  return { ok: true, count: imported };
 }
 
 function createWindow() {
@@ -124,7 +224,18 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("brain:rename", async (_e, { relPath, newTitle, newCategory }) => {
     const oldFull = path.join(rootDir(), relPath);
-    const cat = CATEGORIES.includes(newCategory) ? newCategory : path.dirname(relPath);
+    const currentCat = relPath.split(path.sep)[0];
+    // Don't move trashed items via rename
+    if (currentCat === TRASH) {
+      const dir = path.join(rootDir(), TRASH);
+      const parsed = parseTrashName(path.basename(relPath));
+      const base = `${parsed.originalCategory}${TRASH_SEP}${sanitize(newTitle || "Untitled")}`;
+      let target = path.join(dir, base + ".md");
+      if (target !== oldFull && fssync.existsSync(target)) target = await uniquePath(dir, base, ".md");
+      if (target !== oldFull) await fs.rename(oldFull, target);
+      return { relPath: path.relative(rootDir(), target), category: TRASH, title: sanitize(newTitle || "Untitled") };
+    }
+    const cat = CATEGORIES.includes(newCategory) ? newCategory : currentCat;
     const dir = path.join(rootDir(), cat);
     await fs.mkdir(dir, { recursive: true });
     const base = sanitize(newTitle || "Untitled");
@@ -137,10 +248,8 @@ app.whenReady().then(async () => {
     }
     return { relPath: path.relative(rootDir(), target), category: cat, title: path.basename(target, ".md") };
   });
-  ipcMain.handle("brain:remove", async (_e, relPath) => {
-    await fs.unlink(path.join(rootDir(), relPath));
-    return true;
-  });
+  ipcMain.handle("brain:trash", async (_e, relPath) => trashNote(relPath));
+  ipcMain.handle("brain:restore", async (_e, relPath) => restoreNote(relPath));
   ipcMain.handle("brain:seed", () => seedIfEmpty());
   ipcMain.handle("brain:root", () => rootDir());
   ipcMain.handle("brain:reveal", async (_e, relPath) => {
@@ -148,6 +257,8 @@ app.whenReady().then(async () => {
     shell.showItemInFolder(target);
     return true;
   });
+  ipcMain.handle("brain:export", () => exportAll());
+  ipcMain.handle("brain:import", () => importAll());
 
   createWindow();
   app.on("activate", () => {

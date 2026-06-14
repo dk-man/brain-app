@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, shell } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("brainAPI", {
   list: () => ipcRenderer.invoke("brain:list"),
@@ -7,8 +7,11 @@ contextBridge.exposeInMainWorld("brainAPI", {
   create: (category, title, body) => ipcRenderer.invoke("brain:create", { category, title, body }),
   rename: (relPath, newTitle, newCategory) =>
     ipcRenderer.invoke("brain:rename", { relPath, newTitle, newCategory }),
-  remove: (relPath) => ipcRenderer.invoke("brain:remove", relPath),
+  trash: (relPath) => ipcRenderer.invoke("brain:trash", relPath),
+  restore: (relPath) => ipcRenderer.invoke("brain:restore", relPath),
   seedIfEmpty: () => ipcRenderer.invoke("brain:seed"),
   rootPath: () => ipcRenderer.invoke("brain:root"),
   reveal: (relPath) => ipcRenderer.invoke("brain:reveal", relPath),
+  exportAll: () => ipcRenderer.invoke("brain:export"),
+  importAll: () => ipcRenderer.invoke("brain:import"),
 });
