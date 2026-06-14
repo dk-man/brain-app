@@ -731,13 +731,16 @@
       $("exportBtn").onclick = doExport;
       $("importBtn").onclick = doImport;
       $("folderBtn").onclick = () => api.reveal("");
-      $("themeSegment").querySelectorAll("button").forEach(b => {
-        b.onclick = () => {
-          themeMode = b.dataset.mode;
-          localStorage.setItem("brain.theme", themeMode);
-          applyTheme();
-        };
-      });
+      $("themeToggle").onclick = () => {
+        themeMode = themeMode === "dark" ? "light" : "dark";
+        localStorage.setItem("brain.theme", themeMode);
+        applyTheme();
+      };
+      $("sidebarToggle").onclick = () => {
+        sidebarCollapsed = !sidebarCollapsed;
+        localStorage.setItem("brain.sidebar", sidebarCollapsed ? "collapsed" : "expanded");
+        applySidebar();
+      };
       window.addEventListener("beforeunload", () => { flushPending(); });
       init();
     </script>
