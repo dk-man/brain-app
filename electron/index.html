@@ -23,7 +23,7 @@
         --segment-bg: rgba(0,0,0,0.05);
         --segment-thumb: #ffffff;
       }
-      html[data-theme="dark"], html[data-theme="system"].is-dark {
+      html[data-theme="dark"] {
         color-scheme: dark;
         --bg: #1e1e1e;
         --bg-elev: #252525;
@@ -38,8 +38,6 @@
         --menu-shadow: 0 10px 30px rgba(0,0,0,0.5);
         --overlay: rgba(0,0,0,0.55);
         --input-bg: #1c1c1e;
-        --segment-bg: rgba(255,255,255,0.08);
-        --segment-thumb: #3a3a3c;
       }
       * { box-sizing: border-box; }
       html, body {
@@ -57,6 +55,21 @@
         display: grid;
         grid-template-columns: 220px 260px 1fr;
         height: 100vh;
+        transition: grid-template-columns 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      html[data-sidebar="collapsed"] #app {
+        grid-template-columns: 0 260px 1fr;
+      }
+      html[data-sidebar="collapsed"] .sidebar {
+        opacity: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .sidebar {
+        transition: opacity 0.2s ease;
+      }
+      html[data-sidebar="collapsed"] .list-pane .list-header {
+        padding-left: 78px;
       }
       .pane {
         height: 100%;
