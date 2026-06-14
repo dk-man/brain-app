@@ -599,12 +599,89 @@
         const readOnly = note.category === TRASH;
         pane.innerHTML = `
           <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" ${readOnly ? "readonly" : ""} />
-          <textarea class="body-input" id="bodyInput" placeholder="Start writing…" ${readOnly ? "readonly" : ""}>${escapeHtml(body)}</textarea>
+          <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="false"></div>
         `;
+        const editor = $("bodyInput");
+        renderBodyInto(editor, body);
         if (!readOnly) {
           $("titleInput").oninput = (e) => queueSave({ title: e.target.value });
-          $("bodyInput").oninput = (e) => queueSave({ body: e.target.value });
+          editor.addEventListener("input", () => queueSave({ body: serializeBody(editor) }));
+          editor.addEventListener("click", (e) => {
+            const box = e.target.closest(".cb-box");
+            if (!box) return;
+            const line = box.closest(".cb-line");
+            if (!line) return;
+            const checked = line.dataset.checked === "1";
+            line.dataset.checked = checked ? "0" : "1";
+            queueSave({ body: serializeBody(editor) });
+          });
         }
+      }
+
+      const CB_RE = /^(\s*)- \[( |x|X)\] ?(.*)$/;
+      function renderBodyInto(editor, body) {
+        editor.innerHTML = "";
+        const lines = String(body ?? "").split("\n");
+        for (const raw of lines) {
+          const m = raw.match(CB_RE);
+          const div = document.createElement("div");
+          if (m) {
+            div.className = "md-line cb-line";
+            div.dataset.indent = m[1];
+            div.dataset.checked = m[2].toLowerCase() === "x" ? "1" : "0";
+            const box = document.createElement("span");
+            box.className = "cb-box";
+            box.contentEditable = "false";
+            const label = document.createElement("span");
+            label.className = "cb-label";
+            label.textContent = m[3];
+            div.appendChild(box);
+            div.appendChild(label);
+          } else {
+            div.className = "md-line";
+            if (raw.length === 0) {
+              div.appendChild(document.createElement("br"));
+            } else {
+              div.textContent = raw;
+            }
+          }
+          editor.appendChild(div);
+        }
+      }
+
+      function serializeBody(editor) {
+        const out = [];
+        const children = editor.childNodes.length ? Array.from(editor.childNodes) : [];
+        // If the editor was flattened (no top-level divs), fall back to innerText.
+        const hasBlocks = children.some(n => n.nodeType === 1 && (n.tagName === "DIV" || n.tagName === "P"));
+        if (!hasBlocks) {
+          return (editor.innerText || "").replace(/\r\n/g, "\n");
+        }
+        for (const node of children) {
+          if (node.nodeType === 3) {
+            const t = node.textContent;
+            if (t) out.push(t);
+            continue;
+          }
+          if (node.nodeType !== 1) continue;
+          if (node.tagName === "BR") { out.push(""); continue; }
+          if (node.classList && node.classList.contains("cb-line")) {
+            const indent = node.dataset.indent || "";
+            const checked = node.dataset.checked === "1";
+            const label = node.querySelector(".cb-label");
+            const text = label ? label.textContent : "";
+            out.push(`${indent}- [${checked ? "x" : " "}] ${text}`);
+          } else {
+            // Plain block: may contain nested <br> or text
+            const html = node.innerHTML;
+            if (html === "" || html === "<br>" || html === "<br/>") {
+              out.push("");
+            } else {
+              out.push(node.textContent);
+            }
+          }
+        }
+        return out.join("\n");
       }
 
       function queueSave(patch) {
