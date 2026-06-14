@@ -6,7 +6,7 @@
     <title>Brain</title>
     <style>
       :root {
-        color-scheme: light dark;
+        color-scheme: light;
         --bg: #ffffff;
         --bg-elev: #f5f5f7;
         --bg-sidebar: #fafafa;
@@ -18,21 +18,28 @@
         --hover: rgba(0, 0, 0, 0.04);
         --menu-bg: #ffffff;
         --menu-shadow: 0 10px 30px rgba(0,0,0,0.18);
+        --overlay: rgba(0,0,0,0.35);
+        --input-bg: #ffffff;
+        --segment-bg: rgba(0,0,0,0.05);
+        --segment-thumb: #ffffff;
       }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #1e1e1e;
-          --bg-elev: #252525;
-          --bg-sidebar: #1a1a1a;
-          --border: rgba(255, 255, 255, 0.08);
-          --text: #f5f5f7;
-          --text-muted: #8e8e93;
-          --accent: #0a84ff;
-          --selected: rgba(10, 132, 255, 0.15);
-          --hover: rgba(255, 255, 255, 0.05);
-          --menu-bg: #2c2c2e;
-          --menu-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
+      html[data-theme="dark"], html[data-theme="system"].is-dark {
+        color-scheme: dark;
+        --bg: #1e1e1e;
+        --bg-elev: #252525;
+        --bg-sidebar: #1a1a1a;
+        --border: rgba(255, 255, 255, 0.08);
+        --text: #f5f5f7;
+        --text-muted: #8e8e93;
+        --accent: #0a84ff;
+        --selected: rgba(10, 132, 255, 0.15);
+        --hover: rgba(255, 255, 255, 0.05);
+        --menu-bg: #2c2c2e;
+        --menu-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        --overlay: rgba(0,0,0,0.55);
+        --input-bg: #1c1c1e;
+        --segment-bg: rgba(255,255,255,0.08);
+        --segment-thumb: #3a3a3c;
       }
       * { box-sizing: border-box; }
       html, body {
@@ -86,7 +93,19 @@
         letter-spacing: 0.04em;
         color: var(--text-muted);
         padding: 8px 12px 4px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
       }
+      .section-label .add {
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        padding: 2px 6px;
+        border-radius: 4px;
+        color: var(--text-muted);
+      }
+      .section-label .add:hover { background: var(--hover); color: var(--text); }
       .nav-item {
         display: flex;
         align-items: center;
@@ -122,6 +141,28 @@
       .panel-btn:hover { background: var(--hover); }
       .panel-btn .glyph {
         width: 16px; text-align: center; color: var(--text-muted); font-size: 13px;
+      }
+      .segment {
+        display: flex;
+        background: var(--segment-bg);
+        border-radius: 7px;
+        padding: 2px;
+        margin: 4px 8px 0;
+      }
+      .segment button {
+        flex: 1;
+        border: none;
+        background: transparent;
+        color: var(--text);
+        font-size: 12px;
+        font-family: inherit;
+        padding: 5px 0;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      .segment button.active {
+        background: var(--segment-thumb);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.12);
       }
       .list-header {
         padding: 0 16px 12px;
@@ -229,6 +270,63 @@
         user-select: none;
       }
       .ctx-item:hover { background: var(--selected); color: var(--accent); }
+      .modal-overlay {
+        position: fixed; inset: 0;
+        background: var(--overlay);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 2000;
+      }
+      .modal {
+        background: var(--menu-bg);
+        border-radius: 12px;
+        box-shadow: var(--menu-shadow);
+        padding: 22px;
+        width: 320px;
+      }
+      .modal h3 {
+        margin: 0 0 14px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .modal label {
+        display: block;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        margin: 10px 0 6px;
+      }
+      .modal input[type="text"] {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 7px;
+        border: 1px solid var(--border);
+        background: var(--input-bg);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
+        outline: none;
+      }
+      .modal input[type="text"]:focus { border-color: var(--accent); }
+      .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+      .swatch {
+        width: 24px; height: 24px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid transparent;
+        box-shadow: 0 0 0 1px var(--border) inset;
+      }
+      .swatch.selected { border-color: var(--text); }
+      .modal-actions {
+        display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
+      }
+      .btn {
+        font-family: inherit; font-size: 13px;
+        padding: 7px 14px; border-radius: 7px; border: none; cursor: pointer;
+      }
+      .btn.secondary { background: var(--hover); color: var(--text); }
+      .btn.primary { background: var(--accent); color: white; }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
       ::-webkit-scrollbar { width: 8px; height: 8px; }
       ::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
       .pane:hover ::-webkit-scrollbar-thumb { background: var(--border); }
@@ -239,7 +337,13 @@
       <aside class="pane sidebar">
         <div class="nav-scroll" id="sidebar"></div>
         <div class="panel">
-          <div class="section-label">Manage</div>
+          <div class="section-label">Appearance</div>
+          <div class="segment" id="themeSegment">
+            <button data-mode="light">Light</button>
+            <button data-mode="dark">Dark</button>
+            <button data-mode="system">System</button>
+          </div>
+          <div class="section-label" style="margin-top:10px">Manage</div>
           <button class="panel-btn" id="exportBtn"><span class="glyph">↑</span><span>Export…</span></button>
           <button class="panel-btn" id="importBtn"><span class="glyph">↓</span><span>Import…</span></button>
           <button class="panel-btn" id="folderBtn"><span class="glyph">◴</span><span>Reveal Folder</span></button>
@@ -259,28 +363,48 @@
     </div>
 
     <script>
-      const CATEGORIES = [
-        { id: "Work", name: "Work", color: "#0071e3" },
-        { id: "Hobbies", name: "Hobbies", color: "#34c759" },
-        { id: "Shopping", name: "Shopping", color: "#ff9500" },
-      ];
       const TRASH = "Trash";
+      const PRESET_COLORS = [
+        "#0071e3", "#34c759", "#ff9500", "#ff3b30",
+        "#af52de", "#ff2d55", "#5ac8fa", "#ffcc00",
+        "#a2845e", "#8e8e93",
+      ];
 
       const api = window.brainAPI;
+      let categories = [];
       let notes = [];
       let activeCategory = "all";
       let activeId = null;
       let saveTimer = null;
       let pending = null;
+      let themeMode = localStorage.getItem("brain.theme") || "system";
 
       const $ = (id) => document.getElementById(id);
+      const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+      function applyTheme() {
+        document.documentElement.setAttribute("data-theme", themeMode);
+        if (themeMode === "system") {
+          document.documentElement.classList.toggle("is-dark", systemDark.matches);
+        } else {
+          document.documentElement.classList.remove("is-dark");
+        }
+        $("themeSegment").querySelectorAll("button").forEach(b => {
+          b.classList.toggle("active", b.dataset.mode === themeMode);
+        });
+        try { api.setTheme?.(themeMode); } catch {}
+      }
+      systemDark.addEventListener("change", () => { if (themeMode === "system") applyTheme(); });
 
       async function init() {
+        applyTheme();
         await api.seedIfEmpty();
+        categories = await api.categories();
         await refresh(true);
       }
 
       async function refresh(selectFirst) {
+        categories = await api.categories();
         notes = await api.list();
         notes.sort((a, b) => b.updatedAt - a.updatedAt);
         const vis = visibleNotes();
@@ -289,35 +413,43 @@
         await render();
       }
 
+      function catById(id) { return categories.find(c => c.id === id); }
+
       function renderSidebar() {
         const nonTrash = notes.filter(n => n.category !== TRASH);
-        const counts = { all: nonTrash.length, [TRASH]: notes.length - nonTrash.length };
-        CATEGORIES.forEach(c => counts[c.id] = nonTrash.filter(n => n.category === c.id).length);
+        const trashCount = notes.length - nonTrash.length;
         const html = `
           <div class="section-label">Library</div>
           <div class="nav-item ${activeCategory === 'all' ? 'active' : ''}" data-cat="all">
             <span class="dot" style="background:#8e8e93"></span>
             <span>All Notes</span>
-            <span class="count">${counts.all}</span>
+            <span class="count">${nonTrash.length}</span>
           </div>
-          <div class="section-label" style="margin-top:12px">Categories</div>
-          ${CATEGORIES.map(c => `
-            <div class="nav-item ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
-              <span class="dot" style="background:${c.color}"></span>
-              <span>${c.name}</span>
-              <span class="count">${counts[c.id] || 0}</span>
-            </div>`).join("")}
+          <div class="section-label" style="margin-top:12px">
+            <span>Categories</span>
+            <span class="add" id="addCatBtn" title="New category">+</span>
+          </div>
+          ${categories.map(c => {
+            const count = nonTrash.filter(n => n.category === c.id).length;
+            return `
+              <div class="nav-item ${activeCategory === c.id ? 'active' : ''}" data-cat="${escapeAttr(c.id)}">
+                <span class="dot" style="background:${escapeAttr(c.color)}"></span>
+                <span>${escapeHtml(c.name)}</span>
+                <span class="count">${count}</span>
+              </div>`;
+          }).join("")}
           <div class="section-label" style="margin-top:12px">Bin</div>
           <div class="nav-item ${activeCategory === TRASH ? 'active' : ''}" data-cat="${TRASH}">
             <span class="dot" style="background:#c7c7cc"></span>
             <span>Trash</span>
-            <span class="count">${counts[TRASH] || 0}</span>
+            <span class="count">${trashCount}</span>
           </div>
         `;
         $("sidebar").innerHTML = html;
         $("sidebar").querySelectorAll(".nav-item").forEach(el => {
           el.onclick = async () => { await flushPending(); activeCategory = el.dataset.cat; activeId = null; await refresh(true); };
         });
+        $("addCatBtn").onclick = (e) => { e.stopPropagation(); openNewCategoryModal(); };
       }
 
       function visibleNotes() {
@@ -332,14 +464,14 @@
         $("listTitle").textContent = activeCategory === "all"
           ? "All Notes"
           : activeCategory === TRASH ? "Trash"
-          : CATEGORIES.find(c => c.id === activeCategory).name;
+          : (catById(activeCategory)?.name || activeCategory);
         $("newBtn").style.display = activeCategory === TRASH ? "none" : "";
         $("fileList").innerHTML = list.map(n => {
           const date = new Date(n.updatedAt);
           const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-          const meta = n.category === TRASH ? `from ${escapeHtml(n.originalCategory || "")}` : escapeHtml(n.category);
+          const meta = n.category === TRASH ? `from ${escapeHtml(n.originalCategory || "")}` : escapeHtml(catById(n.category)?.name || n.category);
           return `
-            <div class="file-item ${n.relPath === activeId ? 'active' : ''}" data-id="${escapeHtml(n.relPath)}">
+            <div class="file-item ${n.relPath === activeId ? 'active' : ''}" data-id="${escapeAttr(n.relPath)}">
               <div class="file-name">${escapeHtml(n.title || "Untitled")}</div>
               <div class="file-meta"><span class="date">${dateStr}</span>${meta}</div>
             </div>`;
@@ -377,7 +509,7 @@
         pane.style.minHeight = "0";
         const readOnly = note.category === TRASH;
         pane.innerHTML = `
-          <input class="title-input" id="titleInput" value="${escapeHtml(note.title)}" placeholder="Title" ${readOnly ? "readonly" : ""} />
+          <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" ${readOnly ? "readonly" : ""} />
           <textarea class="body-input" id="bodyInput" placeholder="Start writing…" ${readOnly ? "readonly" : ""}>${escapeHtml(body)}</textarea>
         `;
         if (!readOnly) {
@@ -425,7 +557,7 @@
       async function newNote() {
         if (activeCategory === TRASH) return;
         await flushPending();
-        const cat = activeCategory === "all" ? "Work" : activeCategory;
+        const cat = activeCategory === "all" ? (categories[0]?.id || "Work") : activeCategory;
         const res = await api.create(cat, "Untitled", "");
         await refresh();
         activeId = res.relPath;
@@ -474,6 +606,61 @@
         if (!e.target.closest(".file-item")) hideContextMenu();
       });
 
+      // ---- New Category Modal ----
+      function openNewCategoryModal() {
+        const overlay = document.createElement("div");
+        overlay.className = "modal-overlay";
+        let selectedColor = PRESET_COLORS[0];
+        overlay.innerHTML = `
+          <div class="modal" role="dialog">
+            <h3>New Category</h3>
+            <label>Name</label>
+            <input type="text" id="catName" placeholder="e.g. Travel" maxlength="60" />
+            <label>Color</label>
+            <div class="swatches" id="catSwatches">
+              ${PRESET_COLORS.map((c, i) => `<div class="swatch ${i === 0 ? 'selected' : ''}" data-color="${c}" style="background:${c}"></div>`).join("")}
+            </div>
+            <div class="modal-actions">
+              <button class="btn secondary" id="catCancel">Cancel</button>
+              <button class="btn primary" id="catCreate" disabled>Create</button>
+            </div>
+          </div>`;
+        document.body.appendChild(overlay);
+        const nameInput = overlay.querySelector("#catName");
+        const createBtn = overlay.querySelector("#catCreate");
+        const close = () => overlay.remove();
+        overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+        overlay.querySelector("#catCancel").onclick = close;
+        nameInput.oninput = () => { createBtn.disabled = !nameInput.value.trim(); };
+        overlay.querySelectorAll(".swatch").forEach(s => {
+          s.onclick = () => {
+            overlay.querySelectorAll(".swatch").forEach(x => x.classList.remove("selected"));
+            s.classList.add("selected");
+            selectedColor = s.dataset.color;
+          };
+        });
+        nameInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !createBtn.disabled) createBtn.click();
+          if (e.key === "Escape") close();
+        });
+        createBtn.onclick = async () => {
+          const name = nameInput.value.trim();
+          if (!name) return;
+          createBtn.disabled = true;
+          try {
+            const cat = await api.addCategory(name, selectedColor);
+            close();
+            activeCategory = cat.id;
+            activeId = null;
+            await refresh();
+          } catch (err) {
+            console.error(err);
+            createBtn.disabled = false;
+          }
+        };
+        setTimeout(() => nameInput.focus(), 0);
+      }
+
       async function doExport() {
         await flushPending();
         try {
@@ -492,6 +679,7 @@
       function escapeHtml(s) {
         return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
       }
+      function escapeAttr(s) { return escapeHtml(s); }
 
       async function render() { renderSidebar(); renderList(); await renderEditor(); }
 
@@ -499,6 +687,13 @@
       $("exportBtn").onclick = doExport;
       $("importBtn").onclick = doImport;
       $("folderBtn").onclick = () => api.reveal("");
+      $("themeSegment").querySelectorAll("button").forEach(b => {
+        b.onclick = () => {
+          themeMode = b.dataset.mode;
+          localStorage.setItem("brain.theme", themeMode);
+          applyTheme();
+        };
+      });
       window.addEventListener("beforeunload", () => { flushPending(); });
       init();
     </script>
