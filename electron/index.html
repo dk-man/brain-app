@@ -379,13 +379,16 @@
       <aside class="pane sidebar">
         <div class="nav-scroll" id="sidebar"></div>
         <div class="panel">
-          <div class="section-label">Appearance</div>
-          <div class="segment" id="themeSegment">
-            <button data-mode="light">Light</button>
-            <button data-mode="dark">Dark</button>
-            <button data-mode="system">System</button>
+          <div class="appearance-row">
+            <span class="label">Appearance</span>
+            <button class="theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle light or dark theme">
+              <span class="thumb">
+                <span class="icon-sun">☀</span>
+                <span class="icon-moon">☾</span>
+              </span>
+            </button>
           </div>
-          <div class="section-label" style="margin-top:10px">Manage</div>
+          <div class="section-label" style="margin-top:14px">Manage</div>
           <button class="panel-btn" id="exportBtn"><span class="glyph">↑</span><span>Export…</span></button>
           <button class="panel-btn" id="importBtn"><span class="glyph">↓</span><span>Import…</span></button>
           <button class="panel-btn" id="folderBtn"><span class="glyph">◴</span><span>Reveal Folder</span></button>
@@ -393,7 +396,8 @@
       </aside>
       <section class="pane list-pane">
         <div class="list-header">
-          <div class="list-title" id="listTitle">All Notes</div>
+          <button class="icon-btn" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">⊟</button>
+          <div class="list-title" id="listTitle" style="flex:1; margin-left:6px;">All Notes</div>
           <button class="icon-btn" id="newBtn" title="New note">+</button>
         </div>
         <div id="fileList"></div>
