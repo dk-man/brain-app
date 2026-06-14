@@ -423,24 +423,21 @@
       let activeId = null;
       let saveTimer = null;
       let pending = null;
-      let themeMode = localStorage.getItem("brain.theme") || "system";
+      const savedTheme = localStorage.getItem("brain.theme");
+      let themeMode = savedTheme === "dark" || savedTheme === "light"
+        ? savedTheme
+        : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      let sidebarCollapsed = localStorage.getItem("brain.sidebar") === "collapsed";
 
       const $ = (id) => document.getElementById(id);
-      const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
 
       function applyTheme() {
         document.documentElement.setAttribute("data-theme", themeMode);
-        if (themeMode === "system") {
-          document.documentElement.classList.toggle("is-dark", systemDark.matches);
-        } else {
-          document.documentElement.classList.remove("is-dark");
-        }
-        $("themeSegment").querySelectorAll("button").forEach(b => {
-          b.classList.toggle("active", b.dataset.mode === themeMode);
-        });
         try { api.setTheme?.(themeMode); } catch {}
       }
-      systemDark.addEventListener("change", () => { if (themeMode === "system") applyTheme(); });
+      function applySidebar() {
+        document.documentElement.setAttribute("data-sidebar", sidebarCollapsed ? "collapsed" : "expanded");
+      }
 
       async function init() {
         applyTheme();
