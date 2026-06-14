@@ -23,7 +23,7 @@
         --segment-bg: rgba(0,0,0,0.05);
         --segment-thumb: #ffffff;
       }
-      html[data-theme="dark"], html[data-theme="system"].is-dark {
+      html[data-theme="dark"] {
         color-scheme: dark;
         --bg: #1e1e1e;
         --bg-elev: #252525;
@@ -38,8 +38,6 @@
         --menu-shadow: 0 10px 30px rgba(0,0,0,0.5);
         --overlay: rgba(0,0,0,0.55);
         --input-bg: #1c1c1e;
-        --segment-bg: rgba(255,255,255,0.08);
-        --segment-thumb: #3a3a3c;
       }
       * { box-sizing: border-box; }
       html, body {
@@ -57,6 +55,21 @@
         display: grid;
         grid-template-columns: 220px 260px 1fr;
         height: 100vh;
+        transition: grid-template-columns 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      html[data-sidebar="collapsed"] #app {
+        grid-template-columns: 0 260px 1fr;
+      }
+      html[data-sidebar="collapsed"] .sidebar {
+        opacity: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .sidebar {
+        transition: opacity 0.2s ease;
+      }
+      html[data-sidebar="collapsed"] .list-pane .list-header {
+        padding-left: 78px;
       }
       .pane {
         height: 100%;
@@ -142,27 +155,56 @@
       .panel-btn .glyph {
         width: 16px; text-align: center; color: var(--text-muted); font-size: 13px;
       }
-      .segment {
-        display: flex;
-        background: var(--segment-bg);
-        border-radius: 7px;
-        padding: 2px;
-        margin: 4px 8px 0;
+      /* Elegant theme toggle — pill with sliding thumb */
+      .theme-toggle {
+        position: relative;
+        width: 52px;
+        height: 28px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--bg-elev);
+        cursor: pointer;
+        padding: 0;
+        flex-shrink: 0;
+        transition: background 0.2s ease, border-color 0.2s ease;
       }
-      .segment button {
-        flex: 1;
-        border: none;
-        background: transparent;
+      .theme-toggle:hover { border-color: var(--text-muted); }
+      .theme-toggle .thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--bg);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
         color: var(--text);
         font-size: 12px;
-        font-family: inherit;
-        padding: 5px 0;
-        border-radius: 5px;
-        cursor: pointer;
+        line-height: 1;
+        transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
       }
-      .segment button.active {
-        background: var(--segment-thumb);
-        box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+      html[data-theme="dark"] .theme-toggle .thumb {
+        transform: translateX(24px);
+      }
+      .theme-toggle .icon-sun,
+      .theme-toggle .icon-moon {
+        position: absolute;
+        transition: opacity 0.2s ease;
+      }
+      html[data-theme="dark"] .theme-toggle .icon-sun { opacity: 0; }
+      html[data-theme="light"] .theme-toggle .icon-moon { opacity: 0; }
+      .appearance-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 8px 0;
+      }
+      .appearance-row .label {
+        font-size: 13px;
+        color: var(--text);
       }
       .list-header {
         padding: 0 16px 12px;
@@ -337,13 +379,16 @@
       <aside class="pane sidebar">
         <div class="nav-scroll" id="sidebar"></div>
         <div class="panel">
-          <div class="section-label">Appearance</div>
-          <div class="segment" id="themeSegment">
-            <button data-mode="light">Light</button>
-            <button data-mode="dark">Dark</button>
-            <button data-mode="system">System</button>
+          <div class="appearance-row">
+            <span class="label">Appearance</span>
+            <button class="theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle light or dark theme">
+              <span class="thumb">
+                <span class="icon-sun">☀</span>
+                <span class="icon-moon">☾</span>
+              </span>
+            </button>
           </div>
-          <div class="section-label" style="margin-top:10px">Manage</div>
+          <div class="section-label" style="margin-top:14px">Manage</div>
           <button class="panel-btn" id="exportBtn"><span class="glyph">↑</span><span>Export…</span></button>
           <button class="panel-btn" id="importBtn"><span class="glyph">↓</span><span>Import…</span></button>
           <button class="panel-btn" id="folderBtn"><span class="glyph">◴</span><span>Reveal Folder</span></button>
@@ -351,7 +396,8 @@
       </aside>
       <section class="pane list-pane">
         <div class="list-header">
-          <div class="list-title" id="listTitle">All Notes</div>
+          <button class="icon-btn" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">⊟</button>
+          <div class="list-title" id="listTitle" style="flex:1; margin-left:6px;">All Notes</div>
           <button class="icon-btn" id="newBtn" title="New note">+</button>
         </div>
         <div id="fileList"></div>
@@ -377,27 +423,25 @@
       let activeId = null;
       let saveTimer = null;
       let pending = null;
-      let themeMode = localStorage.getItem("brain.theme") || "system";
+      const savedTheme = localStorage.getItem("brain.theme");
+      let themeMode = savedTheme === "dark" || savedTheme === "light"
+        ? savedTheme
+        : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      let sidebarCollapsed = localStorage.getItem("brain.sidebar") === "collapsed";
 
       const $ = (id) => document.getElementById(id);
-      const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
 
       function applyTheme() {
         document.documentElement.setAttribute("data-theme", themeMode);
-        if (themeMode === "system") {
-          document.documentElement.classList.toggle("is-dark", systemDark.matches);
-        } else {
-          document.documentElement.classList.remove("is-dark");
-        }
-        $("themeSegment").querySelectorAll("button").forEach(b => {
-          b.classList.toggle("active", b.dataset.mode === themeMode);
-        });
         try { api.setTheme?.(themeMode); } catch {}
       }
-      systemDark.addEventListener("change", () => { if (themeMode === "system") applyTheme(); });
+      function applySidebar() {
+        document.documentElement.setAttribute("data-sidebar", sidebarCollapsed ? "collapsed" : "expanded");
+      }
 
       async function init() {
         applyTheme();
+        applySidebar();
         await api.seedIfEmpty();
         categories = await api.categories();
         await refresh(true);
@@ -687,13 +731,16 @@
       $("exportBtn").onclick = doExport;
       $("importBtn").onclick = doImport;
       $("folderBtn").onclick = () => api.reveal("");
-      $("themeSegment").querySelectorAll("button").forEach(b => {
-        b.onclick = () => {
-          themeMode = b.dataset.mode;
-          localStorage.setItem("brain.theme", themeMode);
-          applyTheme();
-        };
-      });
+      $("themeToggle").onclick = () => {
+        themeMode = themeMode === "dark" ? "light" : "dark";
+        localStorage.setItem("brain.theme", themeMode);
+        applyTheme();
+      };
+      $("sidebarToggle").onclick = () => {
+        sidebarCollapsed = !sidebarCollapsed;
+        localStorage.setItem("brain.sidebar", sidebarCollapsed ? "collapsed" : "expanded");
+        applySidebar();
+      };
       window.addEventListener("beforeunload", () => { flushPending(); });
       init();
     </script>
