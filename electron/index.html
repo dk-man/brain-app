@@ -441,6 +441,7 @@
 
       async function init() {
         applyTheme();
+        applySidebar();
         await api.seedIfEmpty();
         categories = await api.categories();
         await refresh(true);
