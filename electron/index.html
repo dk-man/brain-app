@@ -16,6 +16,8 @@
         --accent: #0071e3;
         --selected: rgba(0, 113, 227, 0.08);
         --hover: rgba(0, 0, 0, 0.04);
+        --menu-bg: #ffffff;
+        --menu-shadow: 0 10px 30px rgba(0,0,0,0.18);
       }
       @media (prefers-color-scheme: dark) {
         :root {
@@ -28,6 +30,8 @@
           --accent: #0a84ff;
           --selected: rgba(10, 132, 255, 0.15);
           --hover: rgba(255, 255, 255, 0.05);
+          --menu-bg: #2c2c2e;
+          --menu-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
       }
       * { box-sizing: border-box; }
@@ -56,6 +60,14 @@
       .sidebar {
         background: var(--bg-sidebar);
         padding: 56px 8px 16px;
+        display: flex;
+        flex-direction: column;
+      }
+      .sidebar .nav-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+      .sidebar .panel {
+        border-top: 1px solid var(--border);
+        padding: 10px 4px 4px;
+        margin-top: 8px;
       }
       .list-pane {
         background: var(--bg-elev);
@@ -92,6 +104,25 @@
       .nav-item .dot {
         width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
       }
+      .panel-btn {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        gap: 8px;
+        padding: 7px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text);
+        background: none;
+        border: none;
+        text-align: left;
+        font-family: inherit;
+      }
+      .panel-btn:hover { background: var(--hover); }
+      .panel-btn .glyph {
+        width: 16px; text-align: center; color: var(--text-muted); font-size: 13px;
+      }
       .list-header {
         padding: 0 16px 12px;
         display: flex;
@@ -113,6 +144,7 @@
         display: flex; align-items: center; justify-content: center;
         font-size: 18px;
         transition: background 0.15s;
+        font-family: inherit;
       }
       .icon-btn:hover { background: var(--hover); color: var(--text); }
       .file-item {
@@ -141,16 +173,10 @@
       }
       .file-meta .date { margin-right: 6px; }
       .editor-toolbar {
-        height: 56px;
+        height: 38px;
         flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        padding: 0 20px;
-        gap: 8px;
         -webkit-app-region: drag;
       }
-      .editor-toolbar > * { -webkit-app-region: no-drag; }
-      .editor-toolbar .spacer { flex: 1; }
       .title-input {
         font-size: 22px;
         font-weight: 600;
@@ -184,7 +210,25 @@
         color: var(--text-muted);
         font-size: 14px;
       }
-      .traffic-light-pad { height: 28px; }
+      .ctx-menu {
+        position: fixed;
+        z-index: 1000;
+        min-width: 180px;
+        background: var(--menu-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: var(--menu-shadow);
+        padding: 4px;
+        font-size: 13px;
+      }
+      .ctx-item {
+        padding: 7px 12px;
+        border-radius: 5px;
+        cursor: pointer;
+        color: var(--text);
+        user-select: none;
+      }
+      .ctx-item:hover { background: var(--selected); color: var(--accent); }
       ::-webkit-scrollbar { width: 8px; height: 8px; }
       ::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
       .pane:hover ::-webkit-scrollbar-thumb { background: var(--border); }
@@ -192,9 +236,16 @@
   </head>
   <body>
     <div id="app">
-      <aside class="pane sidebar" id="sidebar"></aside>
+      <aside class="pane sidebar">
+        <div class="nav-scroll" id="sidebar"></div>
+        <div class="panel">
+          <div class="section-label">Manage</div>
+          <button class="panel-btn" id="exportBtn"><span class="glyph">↑</span><span>Export…</span></button>
+          <button class="panel-btn" id="importBtn"><span class="glyph">↓</span><span>Import…</span></button>
+          <button class="panel-btn" id="folderBtn"><span class="glyph">◴</span><span>Reveal Folder</span></button>
+        </div>
+      </aside>
       <section class="pane list-pane">
-        <div class="traffic-light-pad"></div>
         <div class="list-header">
           <div class="list-title" id="listTitle">All Notes</div>
           <button class="icon-btn" id="newBtn" title="New note">+</button>
@@ -202,11 +253,7 @@
         <div id="fileList"></div>
       </section>
       <section class="pane editor-pane" id="editorPane">
-        <div class="editor-toolbar">
-          <div class="spacer"></div>
-          <button class="icon-btn" id="revealBtn" title="Reveal in Finder">⤴</button>
-          <button class="icon-btn" id="deleteBtn" title="Delete">×</button>
-        </div>
+        <div class="editor-toolbar"></div>
         <div id="editorContent" class="empty">Select a note</div>
       </section>
     </div>
@@ -217,13 +264,14 @@
         { id: "Hobbies", name: "Hobbies", color: "#34c759" },
         { id: "Shopping", name: "Shopping", color: "#ff9500" },
       ];
+      const TRASH = "Trash";
 
       const api = window.brainAPI;
-      let notes = []; // { relPath, category, title, updatedAt, body? }
+      let notes = [];
       let activeCategory = "all";
-      let activeId = null; // relPath
+      let activeId = null;
       let saveTimer = null;
-      let pending = null; // { title, body, category }
+      let pending = null;
 
       const $ = (id) => document.getElementById(id);
 
@@ -235,14 +283,16 @@
       async function refresh(selectFirst) {
         notes = await api.list();
         notes.sort((a, b) => b.updatedAt - a.updatedAt);
-        if (selectFirst && !activeId && notes[0]) activeId = notes[0].relPath;
-        if (activeId && !notes.find(n => n.relPath === activeId)) activeId = notes[0]?.relPath || null;
+        const vis = visibleNotes();
+        if (selectFirst && !activeId && vis[0]) activeId = vis[0].relPath;
+        if (activeId && !notes.find(n => n.relPath === activeId)) activeId = vis[0]?.relPath || null;
         await render();
       }
 
       function renderSidebar() {
-        const counts = { all: notes.length };
-        CATEGORIES.forEach(c => counts[c.id] = notes.filter(n => n.category === c.id).length);
+        const nonTrash = notes.filter(n => n.category !== TRASH);
+        const counts = { all: nonTrash.length, [TRASH]: notes.length - nonTrash.length };
+        CATEGORIES.forEach(c => counts[c.id] = nonTrash.filter(n => n.category === c.id).length);
         const html = `
           <div class="section-label">Library</div>
           <div class="nav-item ${activeCategory === 'all' ? 'active' : ''}" data-cat="all">
@@ -257,15 +307,23 @@
               <span>${c.name}</span>
               <span class="count">${counts[c.id] || 0}</span>
             </div>`).join("")}
+          <div class="section-label" style="margin-top:12px">Bin</div>
+          <div class="nav-item ${activeCategory === TRASH ? 'active' : ''}" data-cat="${TRASH}">
+            <span class="dot" style="background:#c7c7cc"></span>
+            <span>Trash</span>
+            <span class="count">${counts[TRASH] || 0}</span>
+          </div>
         `;
         $("sidebar").innerHTML = html;
         $("sidebar").querySelectorAll(".nav-item").forEach(el => {
-          el.onclick = () => { activeCategory = el.dataset.cat; render(); };
+          el.onclick = async () => { await flushPending(); activeCategory = el.dataset.cat; activeId = null; await refresh(true); };
         });
       }
 
       function visibleNotes() {
-        const list = activeCategory === "all" ? notes : notes.filter(n => n.category === activeCategory);
+        let list;
+        if (activeCategory === "all") list = notes.filter(n => n.category !== TRASH);
+        else list = notes.filter(n => n.category === activeCategory);
         return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
       }
 
@@ -273,18 +331,29 @@
         const list = visibleNotes();
         $("listTitle").textContent = activeCategory === "all"
           ? "All Notes"
+          : activeCategory === TRASH ? "Trash"
           : CATEGORIES.find(c => c.id === activeCategory).name;
+        $("newBtn").style.display = activeCategory === TRASH ? "none" : "";
         $("fileList").innerHTML = list.map(n => {
           const date = new Date(n.updatedAt);
           const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+          const meta = n.category === TRASH ? `from ${escapeHtml(n.originalCategory || "")}` : escapeHtml(n.category);
           return `
             <div class="file-item ${n.relPath === activeId ? 'active' : ''}" data-id="${escapeHtml(n.relPath)}">
               <div class="file-name">${escapeHtml(n.title || "Untitled")}</div>
-              <div class="file-meta"><span class="date">${dateStr}</span>${escapeHtml(n.category)}</div>
+              <div class="file-meta"><span class="date">${dateStr}</span>${meta}</div>
             </div>`;
         }).join("");
         $("fileList").querySelectorAll(".file-item").forEach(el => {
           el.onclick = async () => { await flushPending(); activeId = el.dataset.id; render(); };
+          el.oncontextmenu = (e) => {
+            e.preventDefault();
+            const note = notes.find(n => n.relPath === el.dataset.id);
+            if (!note) return;
+            activeId = note.relPath;
+            render();
+            showContextMenu(e.clientX, e.clientY, note);
+          };
         });
       }
 
@@ -306,12 +375,15 @@
         pane.style.flexDirection = "column";
         pane.style.flex = "1";
         pane.style.minHeight = "0";
+        const readOnly = note.category === TRASH;
         pane.innerHTML = `
-          <input class="title-input" id="titleInput" value="${escapeHtml(note.title)}" placeholder="Title" />
-          <textarea class="body-input" id="bodyInput" placeholder="Start writing…">${escapeHtml(body)}</textarea>
+          <input class="title-input" id="titleInput" value="${escapeHtml(note.title)}" placeholder="Title" ${readOnly ? "readonly" : ""} />
+          <textarea class="body-input" id="bodyInput" placeholder="Start writing…" ${readOnly ? "readonly" : ""}>${escapeHtml(body)}</textarea>
         `;
-        $("titleInput").oninput = (e) => queueSave({ title: e.target.value });
-        $("bodyInput").oninput = (e) => queueSave({ body: e.target.value });
+        if (!readOnly) {
+          $("titleInput").oninput = (e) => queueSave({ title: e.target.value });
+          $("bodyInput").oninput = (e) => queueSave({ body: e.target.value });
+        }
       }
 
       function queueSave(patch) {
@@ -334,7 +406,7 @@
           if (p.body !== undefined) {
             await api.write(note.relPath, note.body || "");
           }
-          if (p.title !== undefined && p.title !== note.title.slice(0, 0) /* always */) {
+          if (p.title !== undefined) {
             const res = await api.rename(note.relPath, note.title, note.category);
             if (res.relPath !== note.relPath) {
               if (activeId === note.relPath) activeId = res.relPath;
@@ -351,6 +423,7 @@
       }
 
       async function newNote() {
+        if (activeCategory === TRASH) return;
         await flushPending();
         const cat = activeCategory === "all" ? "Work" : activeCategory;
         const res = await api.create(cat, "Untitled", "");
@@ -360,19 +433,60 @@
         setTimeout(() => { const t = $("titleInput"); if (t) { t.focus(); t.select(); } }, 0);
       }
 
-      async function deleteNote() {
-        if (!activeId) return;
-        const id = activeId;
-        pending = null;
-        clearTimeout(saveTimer);
-        await api.remove(id);
-        notes = notes.filter(n => n.relPath !== id);
-        activeId = visibleNotes()[0]?.relPath || null;
-        await render();
+      async function trashNote(relPath) {
+        pending = null; clearTimeout(saveTimer);
+        await api.trash(relPath);
+        if (activeId === relPath) activeId = null;
+        await refresh(true);
       }
 
-      async function reveal() {
-        await api.reveal(activeId || "");
+      async function restoreNote(relPath) {
+        pending = null; clearTimeout(saveTimer);
+        const res = await api.restore(relPath);
+        if (activeId === relPath) activeId = res.relPath;
+        await refresh();
+      }
+
+      // ---- Context menu ----
+      function hideContextMenu() {
+        document.querySelectorAll(".ctx-menu").forEach(el => el.remove());
+      }
+      function showContextMenu(x, y, note) {
+        hideContextMenu();
+        const menu = document.createElement("div");
+        menu.className = "ctx-menu";
+        const items = note.category === TRASH
+          ? [{ label: "Restore", action: () => restoreNote(note.relPath) }]
+          : [{ label: "Move to Trash", action: () => trashNote(note.relPath) }];
+        menu.innerHTML = items.map((it, i) => `<div class="ctx-item" data-i="${i}">${it.label}</div>`).join("");
+        document.body.appendChild(menu);
+        const rect = menu.getBoundingClientRect();
+        const px = Math.min(x, window.innerWidth - rect.width - 8);
+        const py = Math.min(y, window.innerHeight - rect.height - 8);
+        menu.style.left = px + "px";
+        menu.style.top = py + "px";
+        menu.querySelectorAll(".ctx-item").forEach(el => {
+          el.onclick = () => { hideContextMenu(); items[+el.dataset.i].action(); };
+        });
+      }
+      document.addEventListener("click", hideContextMenu);
+      document.addEventListener("contextmenu", (e) => {
+        if (!e.target.closest(".file-item")) hideContextMenu();
+      });
+
+      async function doExport() {
+        await flushPending();
+        try {
+          const res = await api.exportAll();
+          if (res?.ok) console.log("Exported", res.count, "notes →", res.path);
+        } catch (e) { console.error(e); }
+      }
+      async function doImport() {
+        await flushPending();
+        try {
+          const res = await api.importAll();
+          if (res?.ok) { console.log("Imported", res.count, "notes"); await refresh(); }
+        } catch (e) { console.error(e); }
       }
 
       function escapeHtml(s) {
@@ -382,8 +496,9 @@
       async function render() { renderSidebar(); renderList(); await renderEditor(); }
 
       $("newBtn").onclick = newNote;
-      $("deleteBtn").onclick = deleteNote;
-      $("revealBtn").onclick = reveal;
+      $("exportBtn").onclick = doExport;
+      $("importBtn").onclick = doImport;
+      $("folderBtn").onclick = () => api.reveal("");
       window.addEventListener("beforeunload", () => { flushPending(); });
       init();
     </script>
