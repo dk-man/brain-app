@@ -520,7 +520,8 @@ app.whenReady().then(async () => {
       const newTitleOnDisk = path.basename(finalPath, ".md");
       await writeNote(rel, { title: newTitleOnDisk });
     } catch (e) { /* ignore */ }
-    return { relPath: path.relative(rootDir(), finalPath), category: finalPath.split(path.sep).includes(TRASH) ? TRASH : (ids.includes(newCategory) ? newCategory : currentCat), title: path.basename(finalPath, ".md") };
+    const finalCat = path.relative(rootDir(), finalPath).split(path.sep)[0];
+    return { relPath: path.relative(rootDir(), finalPath), category: finalCat, title: path.basename(finalPath, ".md") };
   });
   ipcMain.handle("brain:trash", async (_e, relPath) => trashNote(relPath));
   ipcMain.handle("brain:restore", async (_e, relPath) => restoreNote(relPath));
