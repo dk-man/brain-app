@@ -330,6 +330,62 @@
         text-decoration: line-through;
         color: var(--text-muted);
       }
+      .meta-bar {
+        padding: 14px 40px 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+      .tag-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px 2px 9px;
+        font-size: 11px;
+        line-height: 1.6;
+        background: var(--bg-elev);
+        color: var(--text);
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        user-select: none;
+      }
+      .tag-chip .x {
+        cursor: pointer;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1;
+        padding: 0 2px;
+        border-radius: 50%;
+      }
+      .tag-chip .x:hover { color: var(--text); background: var(--hover); }
+      .tag-add {
+        background: none;
+        border: 1px dashed var(--border);
+        color: var(--text-muted);
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .tag-add:hover { color: var(--text); border-color: var(--text-muted); }
+      .tag-input {
+        background: var(--input-bg);
+        border: 1px solid var(--accent);
+        color: var(--text);
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        outline: none;
+        font-family: inherit;
+        width: 100px;
+      }
+      .modified-text {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
       .empty {
         flex: 1;
         display: flex;
@@ -586,10 +642,16 @@
           pane.textContent = "Select a note";
           return;
         }
-        let body = note.body;
-        if (body === undefined) {
-          body = await api.read(note.relPath);
-          note.body = body;
+        if (note.frontmatter === undefined || note.body === undefined) {
+          try {
+            const res = await api.readNote(note.relPath);
+            note.frontmatter = res.frontmatter;
+            note.body = res.body;
+          } catch (e) {
+            console.error("readNote failed, falling back", e);
+            note.body = await api.read(note.relPath);
+            note.frontmatter = { title: note.title, tags: [], created: new Date(note.updatedAt).toISOString(), modified: new Date(note.updatedAt).toISOString() };
+          }
         }
         pane.className = "";
         pane.style.display = "flex";
@@ -598,11 +660,13 @@
         pane.style.minHeight = "0";
         const readOnly = note.category === TRASH;
         pane.innerHTML = `
+          <div class="meta-bar" id="metaBar"></div>
           <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" ${readOnly ? "readonly" : ""} />
           <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="false"></div>
         `;
+        renderMetaBar(note, readOnly);
         const editor = $("bodyInput");
-        renderBodyInto(editor, body);
+        renderBodyInto(editor, note.body);
         if (!readOnly) {
           $("titleInput").oninput = (e) => queueSave({ title: e.target.value });
           editor.addEventListener("input", () => queueSave({ body: serializeBody(editor) }));
@@ -616,6 +680,78 @@
             queueSave({ body: serializeBody(editor) });
           });
         }
+      }
+
+      function relativeTime(iso) {
+        if (!iso) return "";
+        const t = new Date(iso).getTime();
+        if (!t) return "";
+        const diff = Math.max(0, Date.now() - t);
+        const s = Math.floor(diff / 1000);
+        if (s < 45) return "just now";
+        const m = Math.floor(s / 60);
+        if (m < 60) return `edited ${m} min ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `edited ${h} hr ago`;
+        const d = Math.floor(h / 24);
+        if (d < 7) return `edited ${d} day${d > 1 ? "s" : ""} ago`;
+        return `edited ${new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+      }
+
+      function renderMetaBar(note, readOnly) {
+        const bar = $("metaBar");
+        if (!bar) return;
+        const tags = Array.isArray(note.frontmatter?.tags) ? note.frontmatter.tags : [];
+        const chips = tags.map((t, i) =>
+          `<span class="tag-chip" data-i="${i}">#${escapeHtml(t)}${readOnly ? "" : '<span class="x" data-remove="' + i + '" title="Remove tag">×</span>'}</span>`
+        ).join("");
+        const addBtn = readOnly ? "" : `<button class="tag-add" id="addTagBtn">+ tag</button>`;
+        const modified = note.frontmatter?.modified || new Date(note.updatedAt).toISOString();
+        bar.innerHTML = chips + addBtn + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
+        if (readOnly) return;
+        bar.querySelectorAll(".x").forEach(el => {
+          el.onclick = (e) => {
+            e.stopPropagation();
+            const i = +el.dataset.remove;
+            const next = tags.slice();
+            next.splice(i, 1);
+            note.frontmatter.tags = next;
+            renderMetaBar(note, readOnly);
+            queueSave({ tags: next });
+          };
+        });
+        const addBtnEl = $("addTagBtn");
+        if (addBtnEl) addBtnEl.onclick = () => startAddTag(note, readOnly);
+      }
+
+      function startAddTag(note, readOnly) {
+        const bar = $("metaBar");
+        const btn = $("addTagBtn");
+        if (!btn) return;
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "tag-input";
+        input.maxLength = 40;
+        input.placeholder = "new tag";
+        btn.replaceWith(input);
+        input.focus();
+        const commit = () => {
+          const v = input.value.trim().replace(/^#/, "").replace(/\s+/g, "-");
+          if (v) {
+            const tags = Array.isArray(note.frontmatter.tags) ? note.frontmatter.tags : [];
+            if (!tags.includes(v)) {
+              const next = [...tags, v];
+              note.frontmatter.tags = next;
+              queueSave({ tags: next });
+            }
+          }
+          renderMetaBar(note, readOnly);
+        };
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); commit(); }
+          else if (e.key === "Escape") { renderMetaBar(note, readOnly); }
+        });
+        input.addEventListener("blur", commit);
       }
 
       const CB_RE = /^(\s*)- \[( |x|X)\] ?(.*)$/;
@@ -652,7 +788,6 @@
       function serializeBody(editor) {
         const out = [];
         const children = editor.childNodes.length ? Array.from(editor.childNodes) : [];
-        // If the editor was flattened (no top-level divs), fall back to innerText.
         const hasBlocks = children.some(n => n.nodeType === 1 && (n.tagName === "DIV" || n.tagName === "P"));
         if (!hasBlocks) {
           return (editor.innerText || "").replace(/\r\n/g, "\n");
@@ -672,7 +807,6 @@
             const text = label ? label.textContent : "";
             out.push(`${indent}- [${checked ? "x" : " "}] ${text}`);
           } else {
-            // Plain block: may contain nested <br> or text
             const html = node.innerHTML;
             if (html === "" || html === "<br>" || html === "<br/>") {
               out.push("");
@@ -690,6 +824,10 @@
         pending = { ...(pending || {}), ...patch, _for: activeId };
         if (patch.body !== undefined) note.body = patch.body;
         if (patch.title !== undefined) note.title = patch.title;
+        if (patch.tags !== undefined) {
+          note.frontmatter = note.frontmatter || { tags: [], title: note.title };
+          note.frontmatter.tags = patch.tags;
+        }
         clearTimeout(saveTimer);
         saveTimer = setTimeout(flushPending, 500);
       }
@@ -701,8 +839,12 @@
         const note = notes.find(n => n.relPath === p._for);
         if (!note) return;
         try {
-          if (p.body !== undefined) {
-            await api.write(note.relPath, note.body || "");
+          const patch = {};
+          if (p.body !== undefined) patch.body = note.body || "";
+          if (p.tags !== undefined) patch.tags = note.frontmatter?.tags || [];
+          if (Object.keys(patch).length > 0) {
+            const res = await api.writeNote(note.relPath, patch);
+            note.frontmatter = res.frontmatter;
           }
           if (p.title !== undefined) {
             const res = await api.rename(note.relPath, note.title, note.category);
@@ -711,10 +853,17 @@
               note.relPath = res.relPath;
               note.title = res.title;
             }
+            // reload frontmatter (rename bumped modified + title)
+            try {
+              const r = await api.readNote(note.relPath);
+              note.frontmatter = r.frontmatter;
+            } catch {}
           }
           note.updatedAt = Date.now();
           renderSidebar();
           renderList();
+          // refresh meta bar in place (no full editor re-render)
+          if (activeId === note.relPath) renderMetaBar(note, note.category === TRASH);
         } catch (err) {
           console.error("save failed", err);
         }
@@ -864,6 +1013,34 @@
         applySidebar();
       };
       window.addEventListener("beforeunload", () => { flushPending(); });
+
+      // External file changes (edits made outside the app)
+      let externalRefreshTimer = null;
+      api.onChange?.(({ paths }) => {
+        // Invalidate cached body/frontmatter for affected notes
+        for (const p of paths || []) {
+          const norm = p.split(/[\\/]/).join("/");
+          const hit = notes.find(n => n.relPath.split(/[\\/]/).join("/") === norm);
+          if (hit) { hit.body = undefined; hit.frontmatter = undefined; }
+        }
+        clearTimeout(externalRefreshTimer);
+        externalRefreshTimer = setTimeout(async () => {
+          // Don't clobber an in-progress edit
+          if (pending) return;
+          await refresh();
+        }, 250);
+      });
+
+      // Keep the "edited X ago" label fresh
+      setInterval(() => {
+        const note = notes.find(n => n.relPath === activeId);
+        const bar = document.getElementById("metaBar");
+        if (note && bar && note.frontmatter?.modified) {
+          const el = bar.querySelector(".modified-text");
+          if (el) el.textContent = relativeTime(note.frontmatter.modified);
+        }
+      }, 30000);
+
       init();
     </script>
   </body>

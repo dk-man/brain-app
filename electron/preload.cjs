@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("brainAPI", {
   categories: () => ipcRenderer.invoke("brain:categories"),
   addCategory: (name, color) => ipcRenderer.invoke("brain:addCategory", { name, color }),
   read: (relPath) => ipcRenderer.invoke("brain:read", relPath),
+  readNote: (relPath) => ipcRenderer.invoke("brain:readNote", relPath),
+  writeNote: (relPath, patch) => ipcRenderer.invoke("brain:writeNote", { relPath, ...patch }),
   write: (relPath, body) => ipcRenderer.invoke("brain:write", { relPath, body }),
   create: (category, title, body) => ipcRenderer.invoke("brain:create", { category, title, body }),
   rename: (relPath, newTitle, newCategory) =>
@@ -18,4 +20,9 @@ contextBridge.exposeInMainWorld("brainAPI", {
   importAll: () => ipcRenderer.invoke("brain:import"),
   setTheme: (mode) => ipcRenderer.invoke("brain:setTheme", mode),
   getTheme: () => ipcRenderer.invoke("brain:getTheme"),
+  onChange: (cb) => {
+    const handler = (_e, payload) => cb(payload);
+    ipcRenderer.on("brain:changed", handler);
+    return () => ipcRenderer.removeListener("brain:changed", handler);
+  },
 });

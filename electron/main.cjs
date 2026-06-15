@@ -107,6 +107,153 @@ function parseTrashName(filename, categoryIds) {
   return { originalCategory: categoryIds[0] || "Work", title: base };
 }
 
+// ----- Frontmatter -----
+const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+
+function parseFrontmatter(raw) {
+  const m = raw.match(FM_RE);
+  if (!m) return { fm: null, body: raw };
+  const fm = {};
+  const lines = m[1].split(/\r?\n/);
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const colon = line.indexOf(":");
+    if (colon < 0) { i++; continue; }
+    const key = line.slice(0, colon).trim();
+    let val = line.slice(colon + 1).trim();
+    if (key === "tags") {
+      if (val.startsWith("[") && val.endsWith("]")) {
+        fm.tags = val.slice(1, -1)
+          .split(",")
+          .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+          .filter(Boolean);
+        i++;
+      } else if (val === "" || val === "[]") {
+        // possible block list
+        const arr = [];
+        let j = i + 1;
+        while (j < lines.length && /^\s*-\s+/.test(lines[j])) {
+          arr.push(lines[j].replace(/^\s*-\s+/, "").trim().replace(/^["']|["']$/g, ""));
+          j++;
+        }
+        fm.tags = arr;
+        i = j;
+      } else {
+        fm.tags = [];
+        i++;
+      }
+    } else {
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      fm[key] = val;
+      i++;
+    }
+  }
+  return { fm, body: raw.slice(m[0].length) };
+}
+
+function yamlEsc(s) {
+  const str = String(s ?? "");
+  if (str === "") return '""';
+  if (/[:#\[\]{}&*!|>'"%@`,\n]/.test(str) || /^\s|\s$/.test(str)) return JSON.stringify(str);
+  return str;
+}
+
+function serializeFrontmatter(fm) {
+  const tags = Array.isArray(fm.tags) ? fm.tags : [];
+  const lines = [
+    `title: ${yamlEsc(fm.title || "")}`,
+    `tags: [${tags.map(yamlEsc).join(", ")}]`,
+    `created: ${fm.created}`,
+    `modified: ${fm.modified}`,
+  ];
+  return `---\n${lines.join("\n")}\n---\n\n`;
+}
+
+// ----- self-write tracking so the watcher ignores our own writes -----
+const selfWrites = new Map();
+function markSelfWrite(full) { selfWrites.set(path.normalize(full), Date.now()); }
+function isSelfWrite(full) {
+  const key = path.normalize(full);
+  const t = selfWrites.get(key);
+  if (!t) return false;
+  if (Date.now() - t < 1500) return true;
+  selfWrites.delete(key);
+  return false;
+}
+
+async function writeFileTracked(full, data) {
+  markSelfWrite(full);
+  await fs.writeFile(full, data, "utf8");
+}
+async function renameTracked(oldFull, newFull) {
+  markSelfWrite(oldFull);
+  markSelfWrite(newFull);
+  await fs.rename(oldFull, newFull);
+}
+
+async function readNoteRaw(relPath) {
+  const full = path.join(rootDir(), relPath);
+  return await fs.readFile(full, "utf8");
+}
+
+async function ensureFrontmatter(relPath) {
+  const full = path.join(rootDir(), relPath);
+  const raw = await fs.readFile(full, "utf8");
+  const parsed = parseFrontmatter(raw);
+  if (parsed.fm && parsed.fm.created && parsed.fm.modified) {
+    // ensure tags array exists
+    if (!Array.isArray(parsed.fm.tags)) parsed.fm.tags = [];
+    if (!parsed.fm.title) parsed.fm.title = path.basename(relPath, ".md");
+    return { frontmatter: parsed.fm, body: parsed.body, injected: false };
+  }
+  const stat = await fs.stat(full);
+  const isTrash = relPath.split(path.sep)[0] === TRASH;
+  let title;
+  if (isTrash) {
+    const cats = await loadCategories();
+    title = parseTrashName(path.basename(relPath), cats.map((c) => c.id)).title;
+  } else {
+    title = path.basename(relPath, ".md");
+  }
+  const created = new Date(stat.birthtimeMs || stat.mtimeMs).toISOString();
+  const modified = new Date(stat.mtimeMs).toISOString();
+  const merged = {
+    title: parsed.fm?.title || title,
+    tags: Array.isArray(parsed.fm?.tags) ? parsed.fm.tags : [],
+    created: parsed.fm?.created || created,
+    modified: parsed.fm?.modified || modified,
+  };
+  const body = parsed.fm ? parsed.body : raw;
+  const newRaw = serializeFrontmatter(merged) + body;
+  await writeFileTracked(full, newRaw);
+  // preserve original mtime so list ordering stays stable
+  try { await fs.utimes(full, stat.atime, stat.mtime); } catch {}
+  return { frontmatter: merged, body, injected: true };
+}
+
+async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
+  const full = path.join(rootDir(), relPath);
+  let existing = { fm: null, body: "" };
+  try {
+    const raw = await fs.readFile(full, "utf8");
+    existing = parseFrontmatter(raw);
+  } catch {}
+  const now = new Date().toISOString();
+  const merged = {
+    title: title ?? existing.fm?.title ?? path.basename(relPath, ".md"),
+    tags: Array.isArray(tags) ? tags : (Array.isArray(existing.fm?.tags) ? existing.fm.tags : []),
+    created: existing.fm?.created || now,
+    modified: bumpModified ? now : (existing.fm?.modified || now),
+  };
+  const newBody = body !== undefined ? body : existing.body;
+  const raw = serializeFrontmatter(merged) + newBody;
+  await writeFileTracked(full, raw);
+  return { frontmatter: merged, body: newBody };
+}
+
 async function listAll() {
   const cats = await ensureDirs();
   const ids = cats.map((c) => c.id);
@@ -158,7 +305,9 @@ async function seedIfEmpty() {
   if (entries.length > 0) return false;
   for (const n of SEED) {
     const p = path.join(rootDir(), n.category, sanitize(n.title) + ".md");
-    await fs.writeFile(p, n.body, "utf8");
+    const now = new Date().toISOString();
+    const fm = serializeFrontmatter({ title: n.title, tags: [], created: now, modified: now });
+    await writeFileTracked(p, fm + n.body);
   }
   return true;
 }
@@ -176,7 +325,7 @@ async function trashNote(relPath) {
   const trashDir = path.join(root, TRASH);
   await fs.mkdir(trashDir, { recursive: true });
   const target = await uniquePath(trashDir, newBase, ".md");
-  await fs.rename(oldFull, target);
+  await renameTracked(oldFull, target);
   return { relPath: path.relative(root, target) };
 }
 
@@ -192,7 +341,7 @@ async function restoreNote(relPath) {
   const dir = path.join(root, cat);
   await fs.mkdir(dir, { recursive: true });
   const target = await uniquePath(dir, sanitize(parsed.title), ".md");
-  await fs.rename(oldFull, target);
+  await renameTracked(oldFull, target);
   return { relPath: path.relative(root, target) };
 }
 
@@ -232,7 +381,6 @@ async function importAll() {
   const raw = await fs.readFile(res.filePaths[0], "utf8");
   const data = JSON.parse(raw);
   if (!Array.isArray(data?.notes)) throw new Error("Invalid export file");
-  // Merge categories
   let cats = await loadCategories();
   if (Array.isArray(data.categories)) {
     for (const c of data.categories) {
@@ -255,10 +403,38 @@ async function importAll() {
       ? `${ids.includes(n.originalCategory) ? n.originalCategory : (ids[0] || "Work")}${TRASH_SEP}${baseTitle}`
       : baseTitle;
     const target = await uniquePath(dir, base, ".md");
-    await fs.writeFile(target, n.body || "", "utf8");
+    await writeFileTracked(target, n.body || "");
     imported++;
   }
   return { ok: true, count: imported };
+}
+
+// ----- File watcher -----
+let watcher = null;
+let watchTimer = null;
+const pendingChanges = new Set();
+function startWatcher() {
+  if (watcher) return;
+  try {
+    watcher = fssync.watch(rootDir(), { recursive: true }, (event, filename) => {
+      if (!filename) return;
+      const norm = filename.replace(/\\/g, path.sep);
+      if (!norm.endsWith(".md")) return;
+      const full = path.join(rootDir(), norm);
+      if (isSelfWrite(full)) return;
+      pendingChanges.add(norm);
+      clearTimeout(watchTimer);
+      watchTimer = setTimeout(() => {
+        const changed = Array.from(pendingChanges);
+        pendingChanges.clear();
+        BrowserWindow.getAllWindows().forEach((w) => {
+          w.webContents.send("brain:changed", { paths: changed });
+        });
+      }, 200);
+    });
+  } catch (e) {
+    console.warn("watch failed", e);
+  }
 }
 
 function createWindow() {
@@ -286,10 +462,17 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:categories", () => loadCategories());
   ipcMain.handle("brain:addCategory", (_e, payload) => addCategory(payload || {}));
   ipcMain.handle("brain:read", async (_e, relPath) => {
-    return await fs.readFile(path.join(rootDir(), relPath), "utf8");
+    // Legacy raw read (no frontmatter stripping). Kept for backward compat.
+    return await readNoteRaw(relPath);
   });
+  ipcMain.handle("brain:readNote", async (_e, relPath) => ensureFrontmatter(relPath));
+  ipcMain.handle("brain:writeNote", async (_e, { relPath, body, title, tags, bumpModified }) =>
+    writeNote(relPath, { body, title, tags, bumpModified }),
+  );
   ipcMain.handle("brain:write", async (_e, { relPath, body }) => {
-    await fs.writeFile(path.join(rootDir(), relPath), body, "utf8");
+    // Legacy: write raw body without touching frontmatter.
+    const full = path.join(rootDir(), relPath);
+    await writeFileTracked(full, body);
     return true;
   });
   ipcMain.handle("brain:create", async (_e, { category, title, body }) => {
@@ -298,7 +481,9 @@ app.whenReady().then(async () => {
     const cat = ids.includes(category) ? category : (ids[0] || "Work");
     const dir = path.join(rootDir(), cat);
     const full = await uniquePath(dir, sanitize(title || "Untitled"), ".md");
-    await fs.writeFile(full, body || "", "utf8");
+    const now = new Date().toISOString();
+    const fm = serializeFrontmatter({ title: title || "Untitled", tags: [], created: now, modified: now });
+    await writeFileTracked(full, fm + (body || ""));
     return { relPath: path.relative(rootDir(), full), category: cat, title: path.basename(full, ".md") };
   });
   ipcMain.handle("brain:rename", async (_e, { relPath, newTitle, newCategory }) => {
@@ -306,27 +491,37 @@ app.whenReady().then(async () => {
     const ids = cats.map((c) => c.id);
     const oldFull = path.join(rootDir(), relPath);
     const currentCat = relPath.split(path.sep)[0];
+    let finalPath;
     if (currentCat === TRASH) {
       const dir = path.join(rootDir(), TRASH);
       const parsed = parseTrashName(path.basename(relPath), ids);
       const base = `${parsed.originalCategory}${TRASH_SEP}${sanitize(newTitle || "Untitled")}`;
       let target = path.join(dir, base + ".md");
       if (target !== oldFull && fssync.existsSync(target)) target = await uniquePath(dir, base, ".md");
-      if (target !== oldFull) await fs.rename(oldFull, target);
-      return { relPath: path.relative(rootDir(), target), category: TRASH, title: sanitize(newTitle || "Untitled") };
+      if (target !== oldFull) await renameTracked(oldFull, target);
+      finalPath = target;
+    } else {
+      const cat = ids.includes(newCategory) ? newCategory : currentCat;
+      const dir = path.join(rootDir(), cat);
+      await fs.mkdir(dir, { recursive: true });
+      const base = sanitize(newTitle || "Untitled");
+      let target = path.join(dir, base + ".md");
+      if (target !== oldFull && fssync.existsSync(target)) {
+        target = await uniquePath(dir, base, ".md");
+      }
+      if (target !== oldFull) {
+        await renameTracked(oldFull, target);
+      }
+      finalPath = target;
     }
-    const cat = ids.includes(newCategory) ? newCategory : currentCat;
-    const dir = path.join(rootDir(), cat);
-    await fs.mkdir(dir, { recursive: true });
-    const base = sanitize(newTitle || "Untitled");
-    let target = path.join(dir, base + ".md");
-    if (target !== oldFull && fssync.existsSync(target)) {
-      target = await uniquePath(dir, base, ".md");
-    }
-    if (target !== oldFull) {
-      await fs.rename(oldFull, target);
-    }
-    return { relPath: path.relative(rootDir(), target), category: cat, title: path.basename(target, ".md") };
+    // sync frontmatter title
+    try {
+      const rel = path.relative(rootDir(), finalPath);
+      const newTitleOnDisk = path.basename(finalPath, ".md");
+      await writeNote(rel, { title: newTitleOnDisk });
+    } catch (e) { /* ignore */ }
+    const finalCat = path.relative(rootDir(), finalPath).split(path.sep)[0];
+    return { relPath: path.relative(rootDir(), finalPath), category: finalCat, title: path.basename(finalPath, ".md") };
   });
   ipcMain.handle("brain:trash", async (_e, relPath) => trashNote(relPath));
   ipcMain.handle("brain:restore", async (_e, relPath) => restoreNote(relPath));
@@ -352,6 +547,7 @@ app.whenReady().then(async () => {
   }));
 
   createWindow();
+  startWatcher();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
