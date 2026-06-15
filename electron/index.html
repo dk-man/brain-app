@@ -823,6 +823,35 @@
       }
 
       const CB_RE = /^(\s*)- \[( |x|X)\] ?(.*)$/;
+      const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+
+      function normTitle(s) { return String(s || "").trim().toLowerCase(); }
+      function titleExists(title) {
+        const key = normTitle(title);
+        return notes.some(n => n.category !== TRASH && normTitle(n.title) === key);
+      }
+      function findByTitle(title) {
+        const key = normTitle(title);
+        return notes.find(n => n.category !== TRASH && normTitle(n.title) === key);
+      }
+
+      function appendWithWikilinks(parent, text) {
+        let last = 0;
+        let m;
+        WIKI_RE.lastIndex = 0;
+        while ((m = WIKI_RE.exec(text)) !== null) {
+          if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+          const a = document.createElement("a");
+          const title = m[1].trim();
+          a.className = "wikilink" + (titleExists(title) ? "" : " missing");
+          a.dataset.title = title;
+          a.textContent = m[0]; // keep [[Title]] visible — round-trip safe
+          parent.appendChild(a);
+          last = m.index + m[0].length;
+        }
+        if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+      }
+
       function renderBodyInto(editor, body) {
         editor.innerHTML = "";
         const lines = String(body ?? "").split("\n");
@@ -838,7 +867,7 @@
             box.contentEditable = "false";
             const label = document.createElement("span");
             label.className = "cb-label";
-            label.textContent = m[3];
+            appendWithWikilinks(label, m[3]);
             div.appendChild(box);
             div.appendChild(label);
           } else {
@@ -846,7 +875,7 @@
             if (raw.length === 0) {
               div.appendChild(document.createElement("br"));
             } else {
-              div.textContent = raw;
+              appendWithWikilinks(div, raw);
             }
           }
           editor.appendChild(div);
