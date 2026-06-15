@@ -1013,6 +1013,34 @@
         applySidebar();
       };
       window.addEventListener("beforeunload", () => { flushPending(); });
+
+      // External file changes (edits made outside the app)
+      let externalRefreshTimer = null;
+      api.onChange?.(({ paths }) => {
+        // Invalidate cached body/frontmatter for affected notes
+        for (const p of paths || []) {
+          const norm = p.split(/[\\/]/).join("/");
+          const hit = notes.find(n => n.relPath.split(/[\\/]/).join("/") === norm);
+          if (hit) { hit.body = undefined; hit.frontmatter = undefined; }
+        }
+        clearTimeout(externalRefreshTimer);
+        externalRefreshTimer = setTimeout(async () => {
+          // Don't clobber an in-progress edit
+          if (pending) return;
+          await refresh();
+        }, 250);
+      });
+
+      // Keep the "edited X ago" label fresh
+      setInterval(() => {
+        const note = notes.find(n => n.relPath === activeId);
+        const bar = document.getElementById("metaBar");
+        if (note && bar && note.frontmatter?.modified) {
+          const el = bar.querySelector(".modified-text");
+          if (el) el.textContent = relativeTime(note.frontmatter.modified);
+        }
+      }, 30000);
+
       init();
     </script>
   </body>
