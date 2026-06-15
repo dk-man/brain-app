@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld("brainAPI", {
   seedIfEmpty: () => ipcRenderer.invoke("brain:seed"),
   rootPath: () => ipcRenderer.invoke("brain:root"),
   reveal: (relPath) => ipcRenderer.invoke("brain:reveal", relPath),
-  exportAll: () => ipcRenderer.invoke("brain:exportAll") || ipcRenderer.invoke("brain:export"),
+  exportAll: () => ipcRenderer.invoke("brain:export"),
   importAll: () => ipcRenderer.invoke("brain:import"),
   setTheme: (mode) => ipcRenderer.invoke("brain:setTheme", mode),
   getTheme: () => ipcRenderer.invoke("brain:getTheme"),
