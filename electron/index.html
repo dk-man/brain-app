@@ -931,6 +931,186 @@
         return out.join("\n");
       }
 
+      // ---------- Wikilinks ----------
+      async function ensureBodyLoaded(note) {
+        if (note.body !== undefined) return;
+        try {
+          const r = await api.readNote(note.relPath);
+          note.frontmatter = r.frontmatter;
+          note.body = r.body;
+        } catch (e) {
+          try { note.body = await api.read(note.relPath); } catch { note.body = ""; }
+        }
+      }
+
+      async function handleWikilinkClick(title) {
+        await flushPending();
+        const target = findByTitle(title);
+        if (target) {
+          activeCategory = target.category === TRASH ? activeCategory : "all";
+          activeId = target.relPath;
+          await render();
+        } else {
+          if (!confirm(`No note titled "${title}" yet. Create it?`)) return;
+          const cat = (activeCategory && activeCategory !== "all" && activeCategory !== TRASH)
+            ? activeCategory
+            : (categories[0]?.id || "Work");
+          const res = await api.create(cat, title, "");
+          await refresh();
+          activeId = res.relPath;
+          await render();
+        }
+      }
+
+      async function renderBacklinks(currentNote) {
+        const container = document.getElementById("backlinks");
+        if (!container) return;
+        const myTitle = normTitle(currentNote.title);
+        // Lazy-load all non-trash note bodies in parallel (cached after first load).
+        const candidates = notes.filter(n => n.category !== TRASH && n.relPath !== currentNote.relPath);
+        await Promise.all(candidates.map(ensureBodyLoaded));
+        const hits = [];
+        for (const n of candidates) {
+          const body = String(n.body || "");
+          let m; WIKI_RE.lastIndex = 0;
+          while ((m = WIKI_RE.exec(body)) !== null) {
+            if (normTitle(m[1]) === myTitle) {
+              // grab one-line snippet around the match
+              const lineStart = body.lastIndexOf("\n", m.index) + 1;
+              const lineEnd = body.indexOf("\n", m.index);
+              const snippet = body.slice(lineStart, lineEnd < 0 ? undefined : lineEnd).trim();
+              hits.push({ note: n, snippet });
+              break;
+            }
+          }
+        }
+        if (hits.length === 0) {
+          container.style.display = "none";
+          container.innerHTML = "";
+          return;
+        }
+        container.style.display = "";
+        container.innerHTML = `<h4>Linked mentions · ${hits.length}</h4>` + hits.map((h, i) =>
+          `<div class="bl-item" data-i="${i}">
+            <div>${escapeHtml(h.note.title)}</div>
+            <div class="bl-snippet">${escapeHtml(h.snippet)}</div>
+          </div>`
+        ).join("");
+        container.querySelectorAll(".bl-item").forEach(el => {
+          el.onclick = async () => {
+            await flushPending();
+            activeId = hits[+el.dataset.i].note.relPath;
+            activeCategory = "all";
+            await render();
+          };
+        });
+      }
+
+      // ---------- Autocomplete ----------
+      let acState = null; // { popup, items, activeIdx, range, query }
+      function hideAutocomplete() {
+        if (acState?.popup) acState.popup.remove();
+        acState = null;
+      }
+      function getCaretBracketContext() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return null;
+        const range = sel.getRangeAt(0);
+        if (!range.collapsed) return null;
+        const node = range.startContainer;
+        if (node.nodeType !== 3) return null;
+        const text = node.textContent.slice(0, range.startOffset);
+        const open = text.lastIndexOf("[[");
+        if (open < 0) return null;
+        const between = text.slice(open + 2);
+        if (between.includes("]") || between.includes("[") || between.includes("\n")) return null;
+        return { node, openOffset: open, caretOffset: range.startOffset, query: between };
+      }
+      function maybeShowAutocomplete(editor) {
+        const ctx = getCaretBracketContext();
+        if (!ctx) { hideAutocomplete(); return; }
+        const q = ctx.query.trim().toLowerCase();
+        const matches = notes
+          .filter(n => n.category !== TRASH)
+          .filter(n => !q || n.title.toLowerCase().includes(q))
+          .slice(0, 8);
+        const items = matches.map(n => ({ type: "existing", title: n.title }));
+        const trimmed = ctx.query.trim();
+        if (trimmed && !matches.some(n => normTitle(n.title) === normTitle(trimmed))) {
+          items.push({ type: "create", title: trimmed });
+        }
+        if (items.length === 0) { hideAutocomplete(); return; }
+        if (!acState) {
+          const popup = document.createElement("div");
+          popup.className = "ac-popup";
+          document.body.appendChild(popup);
+          acState = { popup, items: [], activeIdx: 0, ctx };
+        }
+        acState.items = items;
+        acState.ctx = ctx;
+        if (acState.activeIdx >= items.length) acState.activeIdx = 0;
+        acState.popup.innerHTML = items.map((it, i) =>
+          `<div class="ac-item ${it.type === "create" ? "create" : ""} ${i === acState.activeIdx ? "active" : ""}" data-i="${i}">
+            ${it.type === "create" ? "Create " : ""}${escapeHtml(it.title)}
+          </div>`
+        ).join("");
+        // Position near caret
+        const sel = window.getSelection();
+        if (sel?.rangeCount) {
+          const r = sel.getRangeAt(0).cloneRange();
+          r.collapse(true);
+          const rect = r.getBoundingClientRect();
+          const top = (rect.bottom || 0) + 4;
+          const left = (rect.left || 0);
+          acState.popup.style.top = Math.min(top, window.innerHeight - 230) + "px";
+          acState.popup.style.left = Math.min(left, window.innerWidth - 330) + "px";
+        }
+        acState.popup.querySelectorAll(".ac-item").forEach(el => {
+          el.onmousedown = (e) => { e.preventDefault(); acState.activeIdx = +el.dataset.i; commitAutocomplete(); };
+        });
+      }
+      function commitAutocomplete() {
+        if (!acState) return;
+        const item = acState.items[acState.activeIdx];
+        const ctx = acState.ctx;
+        if (!item || !ctx) { hideAutocomplete(); return; }
+        // Replace text in the caret's text node: from "[[" + query → "[[Title]]"
+        const node = ctx.node;
+        const before = node.textContent.slice(0, ctx.openOffset);
+        const after = node.textContent.slice(ctx.caretOffset);
+        const inserted = `[[${item.title}]]`;
+        node.textContent = before + inserted + after;
+        // Move caret after the inserted closing brackets
+        const sel = window.getSelection();
+        const range = document.createRange();
+        const caret = before.length + inserted.length;
+        range.setStart(node, caret);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        hideAutocomplete();
+        // Re-render so the link becomes clickable and trigger save
+        const editor = document.getElementById("bodyInput");
+        if (editor) {
+          const body = serializeBody(editor);
+          renderBodyInto(editor, body);
+          queueSave({ body });
+        }
+      }
+      function handleAutocompleteKey(e) {
+        if (!acState) return;
+        if (e.key === "ArrowDown") { e.preventDefault(); acState.activeIdx = (acState.activeIdx + 1) % acState.items.length; refreshAcActive(); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); acState.activeIdx = (acState.activeIdx - 1 + acState.items.length) % acState.items.length; refreshAcActive(); }
+        else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); commitAutocomplete(); }
+        else if (e.key === "Escape") { e.preventDefault(); hideAutocomplete(); }
+      }
+      function refreshAcActive() {
+        if (!acState) return;
+        acState.popup.querySelectorAll(".ac-item").forEach((el, i) => el.classList.toggle("active", i === acState.activeIdx));
+      }
+
+
+
       function queueSave(patch) {
         const note = notes.find(n => n.relPath === activeId);
         if (!note) return;
