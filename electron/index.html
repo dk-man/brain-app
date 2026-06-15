@@ -1089,11 +1089,21 @@
         sel.removeAllRanges();
         sel.addRange(range);
         hideAutocomplete();
-        // Re-render so the link becomes clickable and trigger save
         const editor = document.getElementById("bodyInput");
         if (editor) {
           const body = serializeBody(editor);
           renderBodyInto(editor, body);
+          // Restore caret just after the inserted [[Title]] link
+          const links = editor.querySelectorAll(`a.wikilink[data-title="${CSS.escape(item.title)}"]`);
+          const link = links[links.length - 1];
+          if (link) {
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.setStartAfter(link);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
           queueSave({ body });
         }
       }
