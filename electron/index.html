@@ -731,23 +731,39 @@
           <div class="meta-bar" id="metaBar"></div>
           <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" ${readOnly ? "readonly" : ""} />
           <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="false"></div>
+          <div class="backlinks" id="backlinks" style="display:none"></div>
         `;
         renderMetaBar(note, readOnly);
         const editor = $("bodyInput");
         renderBodyInto(editor, note.body);
+        // Wikilink + checkbox click handling (works in trash too — read-only is fine for navigation)
+        editor.addEventListener("click", (e) => {
+          const link = e.target.closest(".wikilink");
+          if (link) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleWikilinkClick(link.dataset.title);
+            return;
+          }
+          if (readOnly) return;
+          const box = e.target.closest(".cb-box");
+          if (!box) return;
+          const line = box.closest(".cb-line");
+          if (!line) return;
+          const checked = line.dataset.checked === "1";
+          line.dataset.checked = checked ? "0" : "1";
+          queueSave({ body: serializeBody(editor) });
+        });
         if (!readOnly) {
           $("titleInput").oninput = (e) => queueSave({ title: e.target.value });
-          editor.addEventListener("input", () => queueSave({ body: serializeBody(editor) }));
-          editor.addEventListener("click", (e) => {
-            const box = e.target.closest(".cb-box");
-            if (!box) return;
-            const line = box.closest(".cb-line");
-            if (!line) return;
-            const checked = line.dataset.checked === "1";
-            line.dataset.checked = checked ? "0" : "1";
+          editor.addEventListener("input", () => {
             queueSave({ body: serializeBody(editor) });
+            maybeShowAutocomplete(editor);
           });
+          editor.addEventListener("keydown", handleAutocompleteKey);
+          editor.addEventListener("blur", () => setTimeout(hideAutocomplete, 150));
         }
+        renderBacklinks(note).catch(err => console.error("backlinks", err));
       }
 
       function relativeTime(iso) {
