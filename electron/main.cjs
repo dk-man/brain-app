@@ -285,16 +285,36 @@ async function listAll() {
 }
 
 const SEED = [
-  { category: "Work", title: "Q3 Priorities",
-    body: "Top focus areas for the quarter:\n\n• Ship onboarding redesign\n• Hire one senior engineer\n• Cut p95 latency by 30%\n\nReview every Friday." },
-  { category: "Work", title: "Meeting Notes — Kickoff",
-    body: "Attendees: A, B, C\n\nDecisions:\n— Launch target: Sep 15\n— Owner: me\n— Weekly sync on Tuesdays" },
+  { category: "Work", title: "Start Here — Welcome to Brain",
+    body: "Brain is a tiny, local-first notes app. Everything you write lives as a plain `.md` file in your Documents/Brain folder — no account, no cloud, no lock-in.\n\nThis welcome note links to short guides that both explain and demonstrate each feature. Click any link below to open it.\n\n## The basics\n- [[Checkboxes — how they work]]\n- [[Tags & frontmatter]]\n- [[Wikilinks & backlinks]]\n- [[Import, export & local storage]]\n- [[Editing outside the app (Obsidian, VS Code)]]\n\n## Try it right now\n1. Click the checkbox below — it saves instantly to disk.\n2. Click the tag chip at the top of this note to add another.\n3. Click [[Checkboxes — how they work]] to jump to another note.\n\n- [ ] I clicked a checkbox\n- [ ] I added a tag\n- [ ] I followed a wikilink\n\nWhen you're done exploring, you can delete these notes — or keep them as a cheat sheet. See also: [[Keyboard & navigation tips]]." },
+
+  { category: "Work", title: "Checkboxes — how they work",
+    body: "Any line that starts with `- [ ]` or `- [x]` is rendered as a real, clickable checkbox. Click it and Brain rewrites that exact line in the `.md` file — nothing else is reformatted or reordered.\n\n## Try it\n- [ ] Click me\n- [x] I'm already done\n- [ ] Edit this note in any text editor, change `[ ]` to `[x]`, save — Brain picks it up live.\n\n## Why this matters\nThe file stays valid GitHub-Flavored Markdown, so the same list works in Obsidian, GitHub, VS Code preview, etc.\n\nRelated: [[Tags & frontmatter]], [[Editing outside the app (Obsidian, VS Code)]]." },
+
+  { category: "Work", title: "Tags & frontmatter",
+    body: "Every note begins with a small YAML block (frontmatter) that stores `title`, `tags`, `created`, and `modified`. You never see the raw YAML — Brain shows tags as chips at the top of the note and a subtle \"edited X min ago\" stamp.\n\n## Try it\n- Click `+ tag` above and add `demo`.\n- Click the × on a chip to remove it.\n- Open this `.md` file in any editor — you'll see a clean YAML block at the top, fully compatible with Obsidian.\n\n## Why frontmatter\nIt makes your notes portable. Other PKM tools (Obsidian, Logseq, Foam, static-site generators) all read the same fields.\n\nRelated: [[Wikilinks & backlinks]]." },
+
+  { category: "Work", title: "Wikilinks & backlinks",
+    body: "Type `[[` anywhere and Brain pops up an autocomplete of existing note titles. Pick one to insert a link like [[Start Here — Welcome to Brain]]. If no note matches, Brain offers to create it.\n\n## Try it\n1. At the end of this line, type `[[che` and pick a suggestion → \n2. Click any link below to jump:\n   - [[Checkboxes — how they work]]\n   - [[Tags & frontmatter]]\n   - [[A note that does not exist yet]]  ← clicking this offers to create it\n\n## Backlinks\nScroll to the bottom of any note to see **Linked mentions** — every other note that mentions this one by title. That's how knowledge connects over time.\n\nRelated: [[Keyboard & navigation tips]]." },
+
+  { category: "Work", title: "Import, export & local storage",
+    body: "Brain stores everything as plain `.md` files inside your **Documents/Brain** folder. No login, no sync server, no telemetry — your notes never leave your machine.\n\n## Export\nUse the export button in the toolbar to save **everything** (notes + categories) as a single JSON file. Good for backups or moving to another machine.\n\n## Import\nPick a previously exported JSON file. Existing notes are kept; new ones are added.\n\n## Just want the files?\nOpen `~/Documents/Brain` in Finder. Each category is a folder, each note is a `.md` file. Copy them anywhere — Dropbox, iCloud, a USB stick, a Git repo.\n\nRelated: [[Editing outside the app (Obsidian, VS Code)]]." },
+
+  { category: "Work", title: "Editing outside the app (Obsidian, VS Code)",
+    body: "Because notes are plain Markdown with YAML frontmatter, you can point **Obsidian**, **VS Code**, **iA Writer**, or any text editor at `~/Documents/Brain` and edit there too.\n\nBrain watches the folder. When you save a file elsewhere:\n- New notes appear in the sidebar.\n- Edits to the body, checkboxes, or tags show up live in Brain.\n- Renames and deletes are reflected too.\n\n## Tip\nPoint Obsidian's vault at `~/Documents/Brain` and you get graph view, mobile sync (via your own iCloud/Dropbox), and Brain's clean UI on the desktop — all on the same files.\n\nRelated: [[Tags & frontmatter]], [[Checkboxes — how they work]]." },
+
+  { category: "Work", title: "Keyboard & navigation tips",
+    body: "- **Click a wikilink** → jump to that note.\n- **Type `[[`** → autocomplete of existing titles. `↑/↓` to choose, `Enter` or `Tab` to insert, `Esc` to dismiss.\n- **Click a tag chip** → remove it; **`+ tag`** → add one.\n- **Click a checkbox** → toggle and save.\n- **Drag a note** to another category in the sidebar to move it.\n- **Delete** moves to Trash (recoverable); deleting from Trash is permanent.\n\nRelated: [[Start Here — Welcome to Brain]]." },
+
   { category: "Hobbies", title: "Reading List",
-    body: "1. The Pragmatic Programmer\n2. Steal Like an Artist\n3. The Creative Act — Rick Rubin\n4. A Pattern Language" },
+    body: "A normal note, to show how you'd actually use Brain day-to-day.\n\n## Want to read\n- [ ] The Pragmatic Programmer\n- [ ] Steal Like an Artist\n- [ ] The Creative Act — Rick Rubin\n- [ ] A Pattern Language\n\n## Done\n- [x] Designing Data-Intensive Applications\n\nTip: link a book to its own note with `[[Book title]]` for notes & quotes. See [[Wikilinks & backlinks]]." },
+
   { category: "Hobbies", title: "Sourdough Schedule",
-    body: "Friday evening — feed starter\nSaturday morning — mix dough\nSaturday afternoon — bulk + fold\nSunday morning — bake at 250°C" },
+    body: "Friday evening — feed starter\nSaturday morning — mix dough\nSaturday afternoon — bulk + fold\nSunday morning — bake at 250°C\n\n- [ ] Feed starter\n- [ ] Mix dough\n- [ ] Bulk ferment 4h\n- [ ] Shape & cold proof overnight\n- [ ] Bake" },
+
   { category: "Shopping", title: "Groceries",
-    body: "- [ ] Eggs\n- [ ] Spinach\n- [ ] Olive oil\n- [ ] Greek yogurt\n- [ ] Coffee beans\n- [ ] Lemons" },
+    body: "Checkboxes are perfect for shopping lists — tap as you go, they save instantly.\n\n- [ ] Eggs\n- [ ] Spinach\n- [ ] Olive oil\n- [ ] Greek yogurt\n- [ ] Coffee beans\n- [ ] Lemons\n\nSee [[Checkboxes — how they work]] for details." },
+
   { category: "Shopping", title: "Hardware Store",
     body: "- [ ] 3M command strips\n- [ ] AA batteries\n- [ ] LED bulb (E27, warm white)\n- [ ] Picture hooks" },
 ];
