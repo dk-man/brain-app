@@ -386,6 +386,74 @@
         font-size: 11px;
         color: var(--text-muted);
       }
+      .wikilink {
+        color: var(--accent);
+        cursor: pointer;
+        text-decoration: none;
+        border-bottom: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+        padding: 0 1px;
+        border-radius: 2px;
+      }
+      .wikilink:hover { background: var(--selected); }
+      .wikilink.missing {
+        color: var(--text-muted);
+        border-bottom: 1px dashed var(--text-muted);
+      }
+      .backlinks {
+        margin: 8px 40px 32px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+      }
+      .backlinks h4 {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin: 0 0 8px;
+        color: var(--text-muted);
+      }
+      .bl-item {
+        padding: 6px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--text);
+        font-size: 13px;
+      }
+      .bl-item:hover { background: var(--hover); }
+      .bl-item .bl-snippet {
+        color: var(--text-muted);
+        font-size: 12px;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bl-empty { font-size: 12px; font-style: italic; color: var(--text-muted); }
+      .ac-popup {
+        position: fixed;
+        z-index: 1500;
+        min-width: 200px;
+        max-width: 320px;
+        max-height: 220px;
+        overflow-y: auto;
+        background: var(--menu-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: var(--menu-shadow);
+        padding: 4px;
+        font-size: 13px;
+      }
+      .ac-item {
+        padding: 6px 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .ac-item.active, .ac-item:hover { background: var(--selected); color: var(--accent); }
+      .ac-item.create { color: var(--text-muted); font-style: italic; }
       .empty {
         flex: 1;
         display: flex;
