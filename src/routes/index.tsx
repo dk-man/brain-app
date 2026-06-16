@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 
 const GITHUB_URL = "https://github.com/dk-man/brain-app";
 const RELEASES_URL = "https://github.com/dk-man/brain-app/releases/latest";
+const DOWNLOAD_URL =
+  "https://github.com/dk-man/brain-app/releases/download/v0.1.0/Brain-darwin-arm64.-.v0.1.0.zip";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -58,7 +60,7 @@ function Landing() {
 
           <div className="mt-10 flex flex-wrap gap-3">
             <a
-              href={RELEASES_URL}
+              href={DOWNLOAD_URL}
               className="inline-flex items-center rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
             >
               Download for macOS
@@ -72,7 +74,10 @@ function Landing() {
           </div>
 
           <p className="mt-4 text-xs text-muted-foreground">
-            Latest release · Apple Silicon · unsigned build
+            v0.1.0 · Apple Silicon · unsigned build ·{" "}
+            <a href={RELEASES_URL} className="underline-offset-4 hover:text-foreground hover:underline">
+              all releases
+            </a>
           </p>
 
           <details className="mt-6 rounded-md border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
