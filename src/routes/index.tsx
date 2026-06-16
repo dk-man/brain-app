@@ -97,12 +97,28 @@ function Landing() {
           </details>
         </section>
 
-        <footer className="mt-auto pt-16 text-xs text-muted-foreground">
-          <span>Built with care. Documentation lives on </span>
+        <footer className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-16 text-xs text-muted-foreground">
+          <span>
+            Built with{" "}
+            <a
+              href="https://lovable.dev/invite/25JXGRN"
+              className="underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Lovable
+            </a>
+            .
+          </span>
+          <span aria-hidden="true">·</span>
+          <a
+            href="https://www.linkedin.com/pulse/local-first-markdown-notes-app-macos-alexander-tereshchenko-flr0f/"
+            className="underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Read the story on LinkedIn
+          </a>
+          <span aria-hidden="true">·</span>
           <a href={GITHUB_URL} className="underline-offset-4 hover:text-foreground hover:underline">
             GitHub
           </a>
-          .
         </footer>
       </div>
     </main>
