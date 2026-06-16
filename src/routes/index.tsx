@@ -72,8 +72,24 @@ function Landing() {
           </div>
 
           <p className="mt-4 text-xs text-muted-foreground">
-            Latest release · unsigned build · right-click → Open on first launch
+            Latest release · Apple Silicon · unsigned build
           </p>
+
+          <details className="mt-6 rounded-md border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+            <summary className="cursor-pointer font-medium text-foreground">
+              macOS says “Brain.app is damaged” or won't open?
+            </summary>
+            <div className="mt-3 space-y-2">
+              <p>
+                Brain isn't code-signed yet, so macOS blocks it by default. After moving the app to{" "}
+                <code className="font-mono">/Applications</code>, open Terminal and run:
+              </p>
+              <pre className="overflow-x-auto rounded bg-background px-3 py-2 font-mono text-foreground">
+                xattr -cr /Applications/Brain.app
+              </pre>
+              <p>Then open the app normally. You only need to do this once.</p>
+            </div>
+          </details>
         </section>
 
         <footer className="mt-auto pt-16 text-xs text-muted-foreground">
