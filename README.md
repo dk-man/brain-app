@@ -14,6 +14,7 @@ A local-first markdown notes app for macOS. Your notes live as plain `.md` files
 - **Interactive checkboxes** — `- [ ]` and `- [x]` render as real checkboxes you can click; the markdown file updates in place.
 - **YAML frontmatter** — optional `---` block at the top of a note for tags, categories, and custom metadata.
 - **Two-way sync with disk** — edit a file in any other editor and Brain picks up the change. Edit it in Brain and the file on disk updates.
+- **Rich paste → Markdown** — paste formatted text from a browser, Copilot/ChatGPT, or a webpage and Brain converts the HTML to Markdown (headings, lists, code blocks, links, tables, …). Plain-text Markdown pastes verbatim.
 - **Obsidian-compatible** — the same vault works in both apps.
 
 ## Install (macOS)
