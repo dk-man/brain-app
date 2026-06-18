@@ -702,7 +702,174 @@
         });
       }
 
+      // ---------- Paste: HTML -> Markdown ----------
+      function handlePaste(e) {
+        const cd = e.clipboardData;
+        if (!cd) return;
+        const html = cd.getData("text/html");
+        const text = cd.getData("text/plain");
+        // If HTML is present AND it adds structure beyond the plain text, convert it.
+        // Otherwise use plain text (which is often already markdown from AI tools).
+        let toInsert;
+        if (html && /<(h[1-6]|ul|ol|li|pre|code|strong|b|em|i|a|blockquote|table|p|br|hr)\b/i.test(html)) {
+          toInsert = htmlToMarkdown(html).trim();
+          if (!toInsert) toInsert = text;
+        } else {
+          toInsert = text;
+        }
+        if (!toInsert) return;
+        e.preventDefault();
+        // insertText handles newlines correctly inside contenteditable (creates new line blocks).
+        document.execCommand("insertText", false, toInsert);
+      }
+
+      function htmlToMarkdown(html) {
+        const tpl = document.createElement("template");
+        tpl.innerHTML = html;
+        // Strip Office/Word/Google Docs wrappers and comments
+        tpl.content.querySelectorAll("style, script, meta, link, title").forEach(n => n.remove());
+        const out = [];
+        walkBlocks(tpl.content, out, { listStack: [] });
+        // Collapse 3+ blank lines to 2
+        return out.join("").replace(/\n{3,}/g, "\n\n");
+      }
+
+      function walkBlocks(node, out, ctx) {
+        for (const child of Array.from(node.childNodes)) {
+          renderBlock(child, out, ctx);
+        }
+      }
+
+      function renderBlock(node, out, ctx) {
+        if (node.nodeType === 3) {
+          const t = node.textContent;
+          if (t && t.trim()) out.push(inlineText(t));
+          return;
+        }
+        if (node.nodeType !== 1) return;
+        const tag = node.tagName.toLowerCase();
+        switch (tag) {
+          case "h1": case "h2": case "h3": case "h4": case "h5": case "h6": {
+            const n = +tag[1];
+            out.push("\n\n" + "#".repeat(n) + " " + renderInline(node).trim() + "\n\n");
+            return;
+          }
+          case "p": case "div": case "section": case "article": case "header": case "footer": case "main": {
+            const inline = renderInline(node).trim();
+            // Check for nested block children
+            const hasBlocks = Array.from(node.children).some(c => /^(h[1-6]|p|div|ul|ol|pre|blockquote|table|hr)$/i.test(c.tagName));
+            if (hasBlocks) { walkBlocks(node, out, ctx); return; }
+            if (inline) out.push(inline + "\n\n");
+            return;
+          }
+          case "br": out.push("  \n"); return;
+          case "hr": out.push("\n---\n\n"); return;
+          case "pre": {
+            const codeEl = node.querySelector("code");
+            const code = (codeEl ? codeEl.textContent : node.textContent).replace(/\n$/, "");
+            const langMatch = codeEl && (codeEl.className || "").match(/language-([\w-]+)/);
+            const lang = langMatch ? langMatch[1] : "";
+            out.push("\n```" + lang + "\n" + code + "\n```\n\n");
+            return;
+          }
+          case "blockquote": {
+            const inner = [];
+            walkBlocks(node, inner, ctx);
+            const lines = inner.join("").trim().split("\n");
+            out.push(lines.map(l => l ? "> " + l : ">").join("\n") + "\n\n");
+            return;
+          }
+          case "ul": case "ol": {
+            ctx.listStack.push({ type: tag, index: 1 });
+            for (const li of Array.from(node.children)) {
+              if (li.tagName.toLowerCase() !== "li") continue;
+              renderListItem(li, out, ctx);
+            }
+            ctx.listStack.pop();
+            if (ctx.listStack.length === 0) out.push("\n");
+            return;
+          }
+          case "table": {
+            // Simple GFM table
+            const rows = Array.from(node.querySelectorAll("tr"));
+            if (!rows.length) return;
+            const cells = rows.map(r => Array.from(r.children).map(c => renderInline(c).trim().replace(/\|/g, "\\|")));
+            const colCount = Math.max(...cells.map(r => r.length));
+            const pad = r => { while (r.length < colCount) r.push(""); return r; };
+            const header = pad(cells[0]);
+            out.push("\n| " + header.join(" | ") + " |\n");
+            out.push("| " + header.map(() => "---").join(" | ") + " |\n");
+            for (let i = 1; i < cells.length; i++) out.push("| " + pad(cells[i]).join(" | ") + " |\n");
+            out.push("\n");
+            return;
+          }
+          default:
+            // Unknown container — recurse
+            walkBlocks(node, out, ctx);
+        }
+      }
+
+      function renderListItem(li, out, ctx) {
+        const depth = ctx.listStack.length - 1;
+        const indent = "  ".repeat(depth);
+        const top = ctx.listStack[ctx.listStack.length - 1];
+        // Build inline content excluding nested lists
+        const clone = li.cloneNode(true);
+        const nested = [];
+        clone.querySelectorAll(":scope > ul, :scope > ol").forEach(n => { nested.push(n); n.remove(); });
+        let marker;
+        if (top.type === "ol") { marker = top.index + ". "; top.index++; }
+        else { marker = "- "; }
+        // GFM task list support
+        const cb = clone.querySelector(':scope > input[type="checkbox"]');
+        let prefix = "";
+        if (cb) { prefix = cb.checked ? "[x] " : "[ ] "; cb.remove(); }
+        const text = renderInline(clone).trim();
+        out.push(indent + marker + prefix + text + "\n");
+        // Recurse into nested lists found on original
+        for (const sub of Array.from(li.children)) {
+          const t = sub.tagName && sub.tagName.toLowerCase();
+          if (t === "ul" || t === "ol") renderBlock(sub, out, ctx);
+        }
+      }
+
+      function renderInline(node) {
+        let s = "";
+        for (const child of Array.from(node.childNodes)) {
+          if (child.nodeType === 3) { s += inlineText(child.textContent); continue; }
+          if (child.nodeType !== 1) continue;
+          const tag = child.tagName.toLowerCase();
+          switch (tag) {
+            case "strong": case "b": s += "**" + renderInline(child) + "**"; break;
+            case "em": case "i": s += "*" + renderInline(child) + "*"; break;
+            case "code": s += "`" + child.textContent + "`"; break;
+            case "a": {
+              const href = child.getAttribute("href") || "";
+              const label = renderInline(child) || href;
+              if (href) s += "[" + label + "](" + href + ")"; else s += label;
+              break;
+            }
+            case "br": s += "  \n"; break;
+            case "del": case "s": case "strike": s += "~~" + renderInline(child) + "~~"; break;
+            case "img": {
+              const alt = child.getAttribute("alt") || "";
+              const src = child.getAttribute("src") || "";
+              if (src) s += "![" + alt + "](" + src + ")";
+              break;
+            }
+            default: s += renderInline(child);
+          }
+        }
+        return s;
+      }
+
+      function inlineText(t) {
+        // Collapse runs of whitespace (HTML rendering rules) but keep single newlines as spaces.
+        return t.replace(/[\t\n\r ]+/g, " ");
+      }
+
       async function renderEditor() {
+
         const note = notes.find(n => n.relPath === activeId);
         const pane = $("editorContent");
         if (!note) {
@@ -762,7 +929,9 @@
           });
           editor.addEventListener("keydown", handleAutocompleteKey);
           editor.addEventListener("blur", () => setTimeout(hideAutocomplete, 150));
+          editor.addEventListener("paste", handlePaste);
         }
+
         renderBacklinks(note).catch(err => console.error("backlinks", err));
       }
 
