@@ -7,6 +7,16 @@ All notable changes to Brain are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- **Edit / Read mode toggle.** Each note now has an `Edit | Read` switch in
+  the header (keyboard shortcut `⌘⇧R`). Edit mode shows the raw Markdown
+  source for fast typing and editing; Read mode shows the rendered,
+  read-only view for distraction-free reading and sharing.
+- **Native spellcheck with right-click suggestions.** Misspelled words are
+  underlined in red, and right-clicking one opens a native context menu
+  with suggested corrections (powered by Electron's built-in
+  spellchecker), plus "Add to Dictionary" and the standard
+  Cut / Copy / Paste / Paste and Match Style / Select All actions. Link
+  context also exposes Copy Link and Open Link in Browser.
 - **Rich paste → Markdown.** Pasting formatted content into a note (e.g. an
   answer from ChatGPT/Copilot in a browser, a webpage selection, a Google
   Docs snippet) now converts the HTML on the clipboard to Markdown source
@@ -16,6 +26,7 @@ All notable changes to Brain are documented here. Format follows
   tables, and strikethrough are all preserved. When the clipboard only
   contains plain text (e.g. pasting raw Markdown source from another
   editor), the text is inserted verbatim.
+
 
 ## [0.1.0] — 2026-06
 
