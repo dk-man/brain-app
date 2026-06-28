@@ -973,8 +973,8 @@
         pane.innerHTML = `
           <div class="meta-bar" id="metaBar"></div>
           <div class="preview-toggle" id="previewToggle" role="tablist">
-            <button type="button" data-mode="edit" class="active" title="Edit (⌘⇧P to toggle)">Edit</button>
-            <button type="button" data-mode="preview" title="Preview (⌘⇧P to toggle)">Preview</button>
+            <button type="button" data-mode="edit" class="active" title="Edit (⌘⇧R to toggle)">Edit</button>
+            <button type="button" data-mode="preview" title="Read (⌘⇧R to toggle)">Read</button>
           </div>
           <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" spellcheck="true" ${readOnly ? "readonly" : ""} />
           <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="true"></div>
