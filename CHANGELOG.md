@@ -4,7 +4,7 @@ All notable changes to Brain are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] — 2026-06-28
 
 ### Added
 - **Edit / Read mode toggle.** Each note now has an `Edit | Read` switch in
