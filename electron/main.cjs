@@ -473,6 +473,59 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(__dirname, "index.html"));
+
+  // Native spellcheck context menu (Word/Notes style: suggestions + Add to Dictionary + standard editing)
+  win.webContents.on("context-menu", (_event, params) => {
+    const menu = new Menu();
+    const { isEditable, misspelledWord, dictionarySuggestions, selectionText, editFlags } = params;
+
+    if (isEditable && misspelledWord && dictionarySuggestions && dictionarySuggestions.length) {
+      for (const suggestion of dictionarySuggestions) {
+        menu.append(new MenuItem({
+          label: suggestion,
+          click: () => win.webContents.replaceMisspelling(suggestion),
+        }));
+      }
+      menu.append(new MenuItem({ type: "separator" }));
+      menu.append(new MenuItem({
+        label: `Add “${misspelledWord}” to Dictionary`,
+        click: () => win.webContents.session.addWordToSpellCheckerDictionary(misspelledWord),
+      }));
+      menu.append(new MenuItem({ type: "separator" }));
+    } else if (isEditable && misspelledWord) {
+      menu.append(new MenuItem({ label: "No spelling suggestions", enabled: false }));
+      menu.append(new MenuItem({ type: "separator" }));
+      menu.append(new MenuItem({
+        label: `Add “${misspelledWord}” to Dictionary`,
+        click: () => win.webContents.session.addWordToSpellCheckerDictionary(misspelledWord),
+      }));
+      menu.append(new MenuItem({ type: "separator" }));
+    }
+
+    if (isEditable || selectionText) {
+      menu.append(new MenuItem({ label: "Cut", role: "cut", enabled: !!editFlags.canCut }));
+      menu.append(new MenuItem({ label: "Copy", role: "copy", enabled: !!editFlags.canCopy }));
+      if (isEditable) {
+        menu.append(new MenuItem({ label: "Paste", role: "paste", enabled: !!editFlags.canPaste }));
+        menu.append(new MenuItem({ label: "Paste and Match Style", role: "pasteAndMatchStyle", enabled: !!editFlags.canPaste }));
+        menu.append(new MenuItem({ label: "Select All", role: "selectAll" }));
+      }
+    }
+
+    if (params.linkURL) {
+      if (menu.items.length) menu.append(new MenuItem({ type: "separator" }));
+      menu.append(new MenuItem({
+        label: "Copy Link",
+        click: () => clipboard.writeText(params.linkURL),
+      }));
+      menu.append(new MenuItem({
+        label: "Open Link in Browser",
+        click: () => shell.openExternal(params.linkURL),
+      }));
+    }
+
+    if (menu.items.length) menu.popup({ window: win });
+  });
 }
 
 app.whenReady().then(async () => {
