@@ -1013,6 +1013,38 @@
           editor.addEventListener("paste", handlePaste);
         }
 
+        // Edit / Preview toggle
+        const previewToggle = $("previewToggle");
+        const previewPane = $("bodyPreview");
+        const setEditorMode = (mode) => {
+          if (mode === "preview") {
+            previewPane.innerHTML = renderMarkdownToHtml(serializeBody(editor));
+            previewPane.style.display = "block";
+            editor.style.display = "none";
+          } else {
+            previewPane.style.display = "none";
+            editor.style.display = "";
+            try { editor.focus(); } catch (_) {}
+          }
+          previewToggle.querySelectorAll("button").forEach(b =>
+            b.classList.toggle("active", b.dataset.mode === mode)
+          );
+        };
+        previewToggle.addEventListener("click", (e) => {
+          const b = e.target.closest("button[data-mode]");
+          if (b) setEditorMode(b.dataset.mode);
+        });
+        // ⌘⇧P (or Ctrl⇧P) toggles preview
+        const togglePreviewKey = (e) => {
+          if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
+            e.preventDefault();
+            const isPreview = previewPane.style.display !== "none";
+            setEditorMode(isPreview ? "edit" : "preview");
+          }
+        };
+        editor.addEventListener("keydown", togglePreviewKey);
+        previewPane.addEventListener("keydown", togglePreviewKey);
+
         renderBacklinks(note).catch(err => console.error("backlinks", err));
       }
 
