@@ -1034,9 +1034,9 @@
           const b = e.target.closest("button[data-mode]");
           if (b) setEditorMode(b.dataset.mode);
         });
-        // ⌘⇧P (or Ctrl⇧P) toggles preview
+        // ⌘⇧R (or Ctrl⇧R) toggles Read mode
         const togglePreviewKey = (e) => {
-          if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
+          if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "r" || e.key === "R")) {
             e.preventDefault();
             const isPreview = previewPane.style.display !== "none";
             setEditorMode(isPreview ? "edit" : "preview");
