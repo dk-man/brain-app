@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 const GITHUB_URL = "https://github.com/dk-man/brain-app";
 const RELEASES_URL = "https://github.com/dk-man/brain-app/releases/latest";
 const DOWNLOAD_URL =
-  "https://github.com/dk-man/brain-app/releases/download/v0.1.0/Brain-darwin-arm64.-.v0.1.0.zip";
+  "https://github.com/dk-man/brain-app/releases/download/v0.2.0/Brain-darwin-arm64-develop.zip";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -53,6 +53,9 @@ function Landing() {
           <ul className="mt-8 space-y-2 text-sm text-muted-foreground">
             <li>— Wikilinks &amp; backlinks between notes</li>
             <li>— Interactive checkboxes that sync back to the file</li>
+            <li>— Edit / Read mode toggle (⌘⇧R) per note</li>
+            <li>— Rich paste from browsers &amp; ChatGPT auto-converts to Markdown</li>
+            <li>— Native spellcheck with right-click suggestions</li>
             <li>— YAML frontmatter with tags and timestamps</li>
             <li>— Two-way sync with external editors</li>
             <li>— No cloud, no account, no telemetry</li>
@@ -74,7 +77,7 @@ function Landing() {
           </div>
 
           <p className="mt-4 text-xs text-muted-foreground">
-            v0.1.0 · Apple Silicon · unsigned build ·{" "}
+            v0.2.0 · Apple Silicon · unsigned build ·{" "}
             <a href={RELEASES_URL} className="underline-offset-4 hover:text-foreground hover:underline">
               all releases
             </a>
