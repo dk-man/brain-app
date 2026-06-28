@@ -98,7 +98,83 @@
         display: flex;
         flex-direction: column;
         padding: 0;
+        position: relative;
       }
+      .preview-toggle {
+        position: absolute;
+        top: 7px;
+        right: 16px;
+        display: inline-flex;
+        background: var(--segment-bg, rgba(0,0,0,0.05));
+        border-radius: 999px;
+        padding: 2px;
+        -webkit-app-region: no-drag;
+        z-index: 10;
+        font-size: 11px;
+      }
+      .preview-toggle button {
+        border: none;
+        background: transparent;
+        font: inherit;
+        font-weight: 500;
+        padding: 4px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: color 0.15s ease;
+      }
+      .preview-toggle button.active {
+        background: var(--segment-thumb, var(--bg));
+        color: var(--text);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+      }
+      .body-preview {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px 40px 40px;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--text);
+      }
+      .body-preview > *:first-child { margin-top: 0; }
+      .body-preview h1 { font-size: 1.8em; font-weight: 600; margin: 0.8em 0 0.4em; letter-spacing: -0.01em; }
+      .body-preview h2 { font-size: 1.4em; font-weight: 600; margin: 0.8em 0 0.4em; }
+      .body-preview h3 { font-size: 1.2em; font-weight: 600; margin: 0.8em 0 0.4em; }
+      .body-preview h4, .body-preview h5, .body-preview h6 { font-weight: 600; margin: 0.8em 0 0.4em; }
+      .body-preview p { margin: 0.6em 0; }
+      .body-preview ul, .body-preview ol { margin: 0.4em 0; padding-left: 1.6em; }
+      .body-preview li { margin: 0.15em 0; }
+      .body-preview li.task { list-style: none; margin-left: -1.4em; }
+      .body-preview li.task input { margin-right: 6px; vertical-align: middle; }
+      .body-preview blockquote {
+        border-left: 3px solid var(--border);
+        padding: 2px 0 2px 12px;
+        color: var(--text-muted);
+        margin: 0.6em 0;
+      }
+      .body-preview code {
+        background: var(--bg-elev);
+        padding: 2px 5px;
+        border-radius: 4px;
+        font-size: 0.88em;
+        font-family: "SF Mono", Menlo, Consolas, monospace;
+      }
+      .body-preview pre {
+        background: var(--bg-elev);
+        padding: 12px 14px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin: 0.6em 0;
+      }
+      .body-preview pre code { background: none; padding: 0; font-size: 0.85em; }
+      .body-preview hr { border: none; border-top: 1px solid var(--border); margin: 1.2em 0; }
+      .body-preview a { color: var(--accent); text-decoration: none; }
+      .body-preview a:hover { text-decoration: underline; }
+      .body-preview img { max-width: 100%; border-radius: 4px; }
+      .body-preview table { border-collapse: collapse; margin: 0.6em 0; font-size: 0.95em; }
+      .body-preview th, .body-preview td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+      .body-preview th { background: var(--bg-elev); font-weight: 600; }
+      .body-preview strong { font-weight: 600; }
       .section-label {
         font-size: 11px;
         font-weight: 600;
@@ -702,7 +778,174 @@
         });
       }
 
+      // ---------- Paste: HTML -> Markdown ----------
+      function handlePaste(e) {
+        const cd = e.clipboardData;
+        if (!cd) return;
+        const html = cd.getData("text/html");
+        const text = cd.getData("text/plain");
+        // If HTML is present AND it adds structure beyond the plain text, convert it.
+        // Otherwise use plain text (which is often already markdown from AI tools).
+        let toInsert;
+        if (html && /<(h[1-6]|ul|ol|li|pre|code|strong|b|em|i|a|blockquote|table|p|br|hr)\b/i.test(html)) {
+          toInsert = htmlToMarkdown(html).trim();
+          if (!toInsert) toInsert = text;
+        } else {
+          toInsert = text;
+        }
+        if (!toInsert) return;
+        e.preventDefault();
+        // insertText handles newlines correctly inside contenteditable (creates new line blocks).
+        document.execCommand("insertText", false, toInsert);
+      }
+
+      function htmlToMarkdown(html) {
+        const tpl = document.createElement("template");
+        tpl.innerHTML = html;
+        // Strip Office/Word/Google Docs wrappers and comments
+        tpl.content.querySelectorAll("style, script, meta, link, title").forEach(n => n.remove());
+        const out = [];
+        walkBlocks(tpl.content, out, { listStack: [] });
+        // Collapse 3+ blank lines to 2
+        return out.join("").replace(/\n{3,}/g, "\n\n");
+      }
+
+      function walkBlocks(node, out, ctx) {
+        for (const child of Array.from(node.childNodes)) {
+          renderBlock(child, out, ctx);
+        }
+      }
+
+      function renderBlock(node, out, ctx) {
+        if (node.nodeType === 3) {
+          const t = node.textContent;
+          if (t && t.trim()) out.push(inlineText(t));
+          return;
+        }
+        if (node.nodeType !== 1) return;
+        const tag = node.tagName.toLowerCase();
+        switch (tag) {
+          case "h1": case "h2": case "h3": case "h4": case "h5": case "h6": {
+            const n = +tag[1];
+            out.push("\n\n" + "#".repeat(n) + " " + renderInline(node).trim() + "\n\n");
+            return;
+          }
+          case "p": case "div": case "section": case "article": case "header": case "footer": case "main": {
+            const inline = renderInline(node).trim();
+            // Check for nested block children
+            const hasBlocks = Array.from(node.children).some(c => /^(h[1-6]|p|div|ul|ol|pre|blockquote|table|hr)$/i.test(c.tagName));
+            if (hasBlocks) { walkBlocks(node, out, ctx); return; }
+            if (inline) out.push(inline + "\n\n");
+            return;
+          }
+          case "br": out.push("  \n"); return;
+          case "hr": out.push("\n---\n\n"); return;
+          case "pre": {
+            const codeEl = node.querySelector("code");
+            const code = (codeEl ? codeEl.textContent : node.textContent).replace(/\n$/, "");
+            const langMatch = codeEl && (codeEl.className || "").match(/language-([\w-]+)/);
+            const lang = langMatch ? langMatch[1] : "";
+            out.push("\n```" + lang + "\n" + code + "\n```\n\n");
+            return;
+          }
+          case "blockquote": {
+            const inner = [];
+            walkBlocks(node, inner, ctx);
+            const lines = inner.join("").trim().split("\n");
+            out.push(lines.map(l => l ? "> " + l : ">").join("\n") + "\n\n");
+            return;
+          }
+          case "ul": case "ol": {
+            ctx.listStack.push({ type: tag, index: 1 });
+            for (const li of Array.from(node.children)) {
+              if (li.tagName.toLowerCase() !== "li") continue;
+              renderListItem(li, out, ctx);
+            }
+            ctx.listStack.pop();
+            if (ctx.listStack.length === 0) out.push("\n");
+            return;
+          }
+          case "table": {
+            // Simple GFM table
+            const rows = Array.from(node.querySelectorAll("tr"));
+            if (!rows.length) return;
+            const cells = rows.map(r => Array.from(r.children).map(c => renderInline(c).trim().replace(/\|/g, "\\|")));
+            const colCount = Math.max(...cells.map(r => r.length));
+            const pad = r => { while (r.length < colCount) r.push(""); return r; };
+            const header = pad(cells[0]);
+            out.push("\n| " + header.join(" | ") + " |\n");
+            out.push("| " + header.map(() => "---").join(" | ") + " |\n");
+            for (let i = 1; i < cells.length; i++) out.push("| " + pad(cells[i]).join(" | ") + " |\n");
+            out.push("\n");
+            return;
+          }
+          default:
+            // Unknown container — recurse
+            walkBlocks(node, out, ctx);
+        }
+      }
+
+      function renderListItem(li, out, ctx) {
+        const depth = ctx.listStack.length - 1;
+        const indent = "  ".repeat(depth);
+        const top = ctx.listStack[ctx.listStack.length - 1];
+        // Build inline content excluding nested lists
+        const clone = li.cloneNode(true);
+        const nested = [];
+        clone.querySelectorAll(":scope > ul, :scope > ol").forEach(n => { nested.push(n); n.remove(); });
+        let marker;
+        if (top.type === "ol") { marker = top.index + ". "; top.index++; }
+        else { marker = "- "; }
+        // GFM task list support
+        const cb = clone.querySelector(':scope > input[type="checkbox"]');
+        let prefix = "";
+        if (cb) { prefix = cb.checked ? "[x] " : "[ ] "; cb.remove(); }
+        const text = renderInline(clone).trim();
+        out.push(indent + marker + prefix + text + "\n");
+        // Recurse into nested lists found on original
+        for (const sub of Array.from(li.children)) {
+          const t = sub.tagName && sub.tagName.toLowerCase();
+          if (t === "ul" || t === "ol") renderBlock(sub, out, ctx);
+        }
+      }
+
+      function renderInline(node) {
+        let s = "";
+        for (const child of Array.from(node.childNodes)) {
+          if (child.nodeType === 3) { s += inlineText(child.textContent); continue; }
+          if (child.nodeType !== 1) continue;
+          const tag = child.tagName.toLowerCase();
+          switch (tag) {
+            case "strong": case "b": s += "**" + renderInline(child) + "**"; break;
+            case "em": case "i": s += "*" + renderInline(child) + "*"; break;
+            case "code": s += "`" + child.textContent + "`"; break;
+            case "a": {
+              const href = child.getAttribute("href") || "";
+              const label = renderInline(child) || href;
+              if (href) s += "[" + label + "](" + href + ")"; else s += label;
+              break;
+            }
+            case "br": s += "  \n"; break;
+            case "del": case "s": case "strike": s += "~~" + renderInline(child) + "~~"; break;
+            case "img": {
+              const alt = child.getAttribute("alt") || "";
+              const src = child.getAttribute("src") || "";
+              if (src) s += "![" + alt + "](" + src + ")";
+              break;
+            }
+            default: s += renderInline(child);
+          }
+        }
+        return s;
+      }
+
+      function inlineText(t) {
+        // Collapse runs of whitespace (HTML rendering rules) but keep single newlines as spaces.
+        return t.replace(/[\t\n\r ]+/g, " ");
+      }
+
       async function renderEditor() {
+
         const note = notes.find(n => n.relPath === activeId);
         const pane = $("editorContent");
         if (!note) {
@@ -729,8 +972,13 @@
         const readOnly = note.category === TRASH;
         pane.innerHTML = `
           <div class="meta-bar" id="metaBar"></div>
-          <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" ${readOnly ? "readonly" : ""} />
-          <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="false"></div>
+          <div class="preview-toggle" id="previewToggle" role="tablist">
+            <button type="button" data-mode="edit" class="active" title="Edit (⌘⇧R to toggle)">Edit</button>
+            <button type="button" data-mode="preview" title="Read (⌘⇧R to toggle)">Read</button>
+          </div>
+          <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" spellcheck="true" ${readOnly ? "readonly" : ""} />
+          <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="true"></div>
+          <div class="body-preview" id="bodyPreview" style="display:none"></div>
           <div class="backlinks" id="backlinks" style="display:none"></div>
         `;
         renderMetaBar(note, readOnly);
@@ -762,7 +1010,41 @@
           });
           editor.addEventListener("keydown", handleAutocompleteKey);
           editor.addEventListener("blur", () => setTimeout(hideAutocomplete, 150));
+          editor.addEventListener("paste", handlePaste);
         }
+
+        // Edit / Preview toggle
+        const previewToggle = $("previewToggle");
+        const previewPane = $("bodyPreview");
+        const setEditorMode = (mode) => {
+          if (mode === "preview") {
+            previewPane.innerHTML = renderMarkdownToHtml(serializeBody(editor));
+            previewPane.style.display = "block";
+            editor.style.display = "none";
+          } else {
+            previewPane.style.display = "none";
+            editor.style.display = "";
+            try { editor.focus(); } catch (_) {}
+          }
+          previewToggle.querySelectorAll("button").forEach(b =>
+            b.classList.toggle("active", b.dataset.mode === mode)
+          );
+        };
+        previewToggle.addEventListener("click", (e) => {
+          const b = e.target.closest("button[data-mode]");
+          if (b) setEditorMode(b.dataset.mode);
+        });
+        // ⌘⇧R (or Ctrl⇧R) toggles Read mode
+        const togglePreviewKey = (e) => {
+          if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "r" || e.key === "R")) {
+            e.preventDefault();
+            const isPreview = previewPane.style.display !== "none";
+            setEditorMode(isPreview ? "edit" : "preview");
+          }
+        };
+        editor.addEventListener("keydown", togglePreviewKey);
+        previewPane.addEventListener("keydown", togglePreviewKey);
+
         renderBacklinks(note).catch(err => console.error("backlinks", err));
       }
 
@@ -1298,6 +1580,79 @@
         return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
       }
       function escapeAttr(s) { return escapeHtml(s); }
+
+      // Minimal markdown → HTML renderer for the Preview pane.
+      // Source-of-truth stays markdown on disk; this only renders the view.
+      function renderMarkdownToHtml(md) {
+        const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
+        const out = [];
+        let i = 0;
+        const renderInline = (s) => {
+          const codes = [];
+          s = s.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return `\u0000C${codes.length - 1}\u0000`; });
+          s = escapeHtml(s);
+          s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img alt="$1" src="$2">');
+          s = s.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t, a) => `<a href="#" class="wikilink">${a || t}</a>`);
+          s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+          s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+          s = s.replace(/__([^_\n]+)__/g, "<strong>$1</strong>");
+          s = s.replace(/(^|[^*\w])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+          s = s.replace(/(^|[^_\w])_([^_\n]+)_/g, "$1<em>$2</em>");
+          s = s.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
+          s = s.replace(/\u0000C(\d+)\u0000/g, (_, idx) => `<code>${escapeHtml(codes[+idx])}</code>`);
+          return s;
+        };
+        const isListLine = (l) => /^(\s*)([-*+]|\d+\.)\s+/.test(l);
+        const isBlankOrBreak = (l) =>
+          /^\s*$/.test(l) || /^#{1,6}\s/.test(l) || /^```/.test(l) || isListLine(l) || /^>\s?/.test(l) || /^(-\s*-\s*-+|\*\s*\*\s*\*+|_\s*_\s*_+)\s*$/.test(l);
+        while (i < lines.length) {
+          const line = lines[i];
+          const fence = line.match(/^```(\w*)\s*$/);
+          if (fence) {
+            const lang = fence[1];
+            const buf = [];
+            i++;
+            while (i < lines.length && !/^```\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
+            i++;
+            out.push(`<pre><code${lang ? ` class="language-${lang}"` : ""}>${escapeHtml(buf.join("\n"))}</code></pre>`);
+            continue;
+          }
+          const h = line.match(/^(#{1,6})\s+(.*)$/);
+          if (h) { out.push(`<h${h[1].length}>${renderInline(h[2])}</h${h[1].length}>`); i++; continue; }
+          if (/^\s*(-\s*-\s*-+|\*\s*\*\s*\*+|_\s*_\s*_+)\s*$/.test(line)) { out.push("<hr>"); i++; continue; }
+          if (/^>\s?/.test(line)) {
+            const buf = [];
+            while (i < lines.length && /^>\s?/.test(lines[i])) { buf.push(lines[i].replace(/^>\s?/, "")); i++; }
+            out.push(`<blockquote>${renderMarkdownToHtml(buf.join("\n"))}</blockquote>`);
+            continue;
+          }
+          if (isListLine(line)) {
+            const first = line.match(/^(\s*)([-*+]|\d+\.)\s+/);
+            const ordered = /\d+\./.test(first[2]);
+            const tag = ordered ? "ol" : "ul";
+            const items = [];
+            while (i < lines.length && isListLine(lines[i])) {
+              const m = lines[i].match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+              let content = m[3];
+              const task = content.match(/^\[([ xX])\]\s+(.*)$/);
+              if (task) {
+                const checked = task[1].toLowerCase() === "x" ? " checked" : "";
+                items.push(`<li class="task"><input type="checkbox" disabled${checked}> ${renderInline(task[2])}</li>`);
+              } else {
+                items.push(`<li>${renderInline(content)}</li>`);
+              }
+              i++;
+            }
+            out.push(`<${tag}>${items.join("")}</${tag}>`);
+            continue;
+          }
+          if (/^\s*$/.test(line)) { i++; continue; }
+          const buf = [line]; i++;
+          while (i < lines.length && !isBlankOrBreak(lines[i])) { buf.push(lines[i]); i++; }
+          out.push(`<p>${renderInline(buf.join(" "))}</p>`);
+        }
+        return out.join("\n");
+      }
 
       async function render() { renderSidebar(); renderList(); await renderEditor(); }
 
