@@ -972,8 +972,13 @@
         const readOnly = note.category === TRASH;
         pane.innerHTML = `
           <div class="meta-bar" id="metaBar"></div>
-          <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" ${readOnly ? "readonly" : ""} />
-          <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="false"></div>
+          <div class="preview-toggle" id="previewToggle" role="tablist">
+            <button type="button" data-mode="edit" class="active" title="Edit (⌘⇧P to toggle)">Edit</button>
+            <button type="button" data-mode="preview" title="Preview (⌘⇧P to toggle)">Preview</button>
+          </div>
+          <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" spellcheck="true" ${readOnly ? "readonly" : ""} />
+          <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="true"></div>
+          <div class="body-preview" id="bodyPreview" style="display:none"></div>
           <div class="backlinks" id="backlinks" style="display:none"></div>
         `;
         renderMetaBar(note, readOnly);
