@@ -17,6 +17,16 @@ function rootDir() {
   return path.join(app.getPath("documents"), "Brain");
 }
 
+function safeJoin(relPath) {
+  const root = path.resolve(rootDir());
+  const full = path.resolve(path.join(root, String(relPath || "")));
+  if (full !== root && !full.startsWith(root + path.sep)) {
+    throw new Error("Path traversal detected");
+  }
+  return full;
+}
+
+
 function categoriesFilePath() {
   return path.join(rootDir(), CATEGORIES_FILE);
 }
