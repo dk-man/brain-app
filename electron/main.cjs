@@ -513,16 +513,20 @@ function createWindow() {
     }
 
     if (params.linkURL) {
+      const isSafeHttp = /^https?:\/\//i.test(params.linkURL);
       if (menu.items.length) menu.append(new MenuItem({ type: "separator" }));
       menu.append(new MenuItem({
         label: "Copy Link",
         click: () => clipboard.writeText(params.linkURL),
       }));
-      menu.append(new MenuItem({
-        label: "Open Link in Browser",
-        click: () => shell.openExternal(params.linkURL),
-      }));
+      if (isSafeHttp) {
+        menu.append(new MenuItem({
+          label: "Open Link in Browser",
+          click: () => shell.openExternal(params.linkURL),
+        }));
+      }
     }
+
 
     if (menu.items.length) menu.popup({ window: win });
   });
