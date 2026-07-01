@@ -205,12 +205,12 @@ async function renameTracked(oldFull, newFull) {
 }
 
 async function readNoteRaw(relPath) {
-  const full = path.join(rootDir(), relPath);
+  const full = safeJoin(relPath);
   return await fs.readFile(full, "utf8");
 }
 
 async function ensureFrontmatter(relPath) {
-  const full = path.join(rootDir(), relPath);
+  const full = safeJoin(relPath);
   const raw = await fs.readFile(full, "utf8");
   const parsed = parseFrontmatter(raw);
   if (parsed.fm && parsed.fm.created && parsed.fm.modified) {
@@ -245,7 +245,7 @@ async function ensureFrontmatter(relPath) {
 }
 
 async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
-  const full = path.join(rootDir(), relPath);
+  const full = safeJoin(relPath);
   let existing = { fm: null, body: "" };
   try {
     const raw = await fs.readFile(full, "utf8");
@@ -558,7 +558,7 @@ app.whenReady().then(async () => {
   );
   ipcMain.handle("brain:write", async (_e, { relPath, body }) => {
     // Legacy: write raw body without touching frontmatter.
-    const full = path.join(rootDir(), relPath);
+    const full = safeJoin(relPath);
     await writeFileTracked(full, body);
     return true;
   });
@@ -576,7 +576,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:rename", async (_e, { relPath, newTitle, newCategory }) => {
     const cats = await loadCategories();
     const ids = cats.map((c) => c.id);
-    const oldFull = path.join(rootDir(), relPath);
+    const oldFull = safeJoin(relPath);
     const currentCat = relPath.split(path.sep)[0];
     let finalPath;
     if (currentCat === TRASH) {
@@ -615,7 +615,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:seed", () => seedIfEmpty());
   ipcMain.handle("brain:root", () => rootDir());
   ipcMain.handle("brain:reveal", async (_e, relPath) => {
-    const target = relPath ? path.join(rootDir(), relPath) : rootDir();
+    const target = relPath ? safeJoin(relPath) : rootDir();
     shell.showItemInFolder(target);
     return true;
   });
