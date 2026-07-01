@@ -17,6 +17,16 @@ function rootDir() {
   return path.join(app.getPath("documents"), "Brain");
 }
 
+function safeJoin(relPath) {
+  const root = path.resolve(rootDir());
+  const full = path.resolve(path.join(root, String(relPath || "")));
+  if (full !== root && !full.startsWith(root + path.sep)) {
+    throw new Error("Path traversal detected");
+  }
+  return full;
+}
+
+
 function categoriesFilePath() {
   return path.join(rootDir(), CATEGORIES_FILE);
 }
@@ -195,12 +205,12 @@ async function renameTracked(oldFull, newFull) {
 }
 
 async function readNoteRaw(relPath) {
-  const full = path.join(rootDir(), relPath);
+  const full = safeJoin(relPath);
   return await fs.readFile(full, "utf8");
 }
 
 async function ensureFrontmatter(relPath) {
-  const full = path.join(rootDir(), relPath);
+  const full = safeJoin(relPath);
   const raw = await fs.readFile(full, "utf8");
   const parsed = parseFrontmatter(raw);
   if (parsed.fm && parsed.fm.created && parsed.fm.modified) {
@@ -235,7 +245,7 @@ async function ensureFrontmatter(relPath) {
 }
 
 async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
-  const full = path.join(rootDir(), relPath);
+  const full = safeJoin(relPath);
   let existing = { fm: null, body: "" };
   try {
     const raw = await fs.readFile(full, "utf8");
@@ -336,7 +346,7 @@ async function trashNote(relPath) {
   const cats = await loadCategories();
   const ids = cats.map((c) => c.id);
   const root = rootDir();
-  const oldFull = path.join(root, relPath);
+  const oldFull = safeJoin(relPath);
   const parts = relPath.split(path.sep);
   const cat = parts[0];
   if (cat === TRASH) return { relPath };
@@ -353,7 +363,7 @@ async function restoreNote(relPath) {
   const cats = await loadCategories();
   const ids = cats.map((c) => c.id);
   const root = rootDir();
-  const oldFull = path.join(root, relPath);
+  const oldFull = safeJoin(relPath);
   const parts = relPath.split(path.sep);
   if (parts[0] !== TRASH) return { relPath };
   const parsed = parseTrashName(parts[parts.length - 1], ids);
@@ -513,16 +523,20 @@ function createWindow() {
     }
 
     if (params.linkURL) {
+      const isSafeHttp = /^https?:\/\//i.test(params.linkURL);
       if (menu.items.length) menu.append(new MenuItem({ type: "separator" }));
       menu.append(new MenuItem({
         label: "Copy Link",
         click: () => clipboard.writeText(params.linkURL),
       }));
-      menu.append(new MenuItem({
-        label: "Open Link in Browser",
-        click: () => shell.openExternal(params.linkURL),
-      }));
+      if (isSafeHttp) {
+        menu.append(new MenuItem({
+          label: "Open Link in Browser",
+          click: () => shell.openExternal(params.linkURL),
+        }));
+      }
     }
+
 
     if (menu.items.length) menu.popup({ window: win });
   });
@@ -544,7 +558,7 @@ app.whenReady().then(async () => {
   );
   ipcMain.handle("brain:write", async (_e, { relPath, body }) => {
     // Legacy: write raw body without touching frontmatter.
-    const full = path.join(rootDir(), relPath);
+    const full = safeJoin(relPath);
     await writeFileTracked(full, body);
     return true;
   });
@@ -562,7 +576,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:rename", async (_e, { relPath, newTitle, newCategory }) => {
     const cats = await loadCategories();
     const ids = cats.map((c) => c.id);
-    const oldFull = path.join(rootDir(), relPath);
+    const oldFull = safeJoin(relPath);
     const currentCat = relPath.split(path.sep)[0];
     let finalPath;
     if (currentCat === TRASH) {
@@ -601,7 +615,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:seed", () => seedIfEmpty());
   ipcMain.handle("brain:root", () => rootDir());
   ipcMain.handle("brain:reveal", async (_e, relPath) => {
-    const target = relPath ? path.join(rootDir(), relPath) : rootDir();
+    const target = relPath ? safeJoin(relPath) : rootDir();
     shell.showItemInFolder(target);
     return true;
   });
