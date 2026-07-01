@@ -346,7 +346,7 @@ async function trashNote(relPath) {
   const cats = await loadCategories();
   const ids = cats.map((c) => c.id);
   const root = rootDir();
-  const oldFull = path.join(root, relPath);
+  const oldFull = safeJoin(relPath);
   const parts = relPath.split(path.sep);
   const cat = parts[0];
   if (cat === TRASH) return { relPath };
@@ -363,7 +363,7 @@ async function restoreNote(relPath) {
   const cats = await loadCategories();
   const ids = cats.map((c) => c.id);
   const root = rootDir();
-  const oldFull = path.join(root, relPath);
+  const oldFull = safeJoin(relPath);
   const parts = relPath.split(path.sep);
   if (parts[0] !== TRASH) return { relPath };
   const parsed = parseTrashName(parts[parts.length - 1], ids);
