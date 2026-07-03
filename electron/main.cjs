@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu, MenuItem, clipboard } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu, MenuItem, clipboard, globalShortcut } = require("electron");
 const path = require("path");
 const fs = require("fs/promises");
 const fssync = require("fs");
@@ -6,6 +6,10 @@ const fssync = require("fs");
 const TRASH = "Trash";
 const TRASH_SEP = "__";
 const CATEGORIES_FILE = ".categories.json";
+const INBOX = "Inbox";
+
+// Quick-capture global hotkey. Change here to rebind.
+const QUICK_CAPTURE_HOTKEY = "CommandOrControl+Shift+N";
 
 const DEFAULT_CATEGORIES = [
   { id: "Work", name: "Work", color: "#0071e3" },
@@ -472,6 +476,81 @@ function startWatcher() {
   }
 }
 
+async function ensureInboxCategory() {
+  const cats = await loadCategories();
+  if (!cats.find((c) => c.id.toLowerCase() === INBOX.toLowerCase())) {
+    cats.push({ id: INBOX, name: INBOX, color: "#af52de" });
+    await saveCategories(cats);
+  }
+  await fs.mkdir(path.join(rootDir(), INBOX), { recursive: true });
+}
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function timestampSlug(d = new Date()) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+async function quickCapture(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return { ok: false };
+  await ensureInboxCategory();
+  const firstLine = trimmed.split(/\r?\n/)[0].trim();
+  const derived = sanitize(firstLine.replace(/^#+\s*/, "").slice(0, 60) || "quick note");
+  const base = `${timestampSlug()}-${derived}`;
+  const dir = safeJoin(INBOX);
+  const target = await uniquePath(dir, base, ".md");
+  const now = new Date().toISOString();
+  const title = path.basename(target, ".md");
+  const fm = serializeFrontmatter({ title, tags: [], created: now, modified: now });
+  await writeFileTracked(target, fm + trimmed + "\n");
+  return { ok: true, relPath: path.relative(rootDir(), target) };
+}
+
+// ----- Quick-capture window -----
+let captureWin = null;
+function createCaptureWindow() {
+  if (captureWin && !captureWin.isDestroyed()) return captureWin;
+  captureWin = new BrowserWindow({
+    width: 600,
+    height: 200,
+    center: true,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    vibrancy: "under-window",
+    visualEffectState: "active",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "quick-capture-preload.cjs"),
+    },
+  });
+  captureWin.setAlwaysOnTop(true, "floating");
+  captureWin.loadFile(path.join(__dirname, "quick-capture.html"));
+  captureWin.on("blur", () => {
+    if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+  });
+  captureWin.on("closed", () => { captureWin = null; });
+  return captureWin;
+}
+
+function showCaptureWindow() {
+  const win = createCaptureWindow();
+  if (win.isVisible()) { win.focus(); return; }
+  win.center();
+  const notify = () => win.webContents.send("brain:quickCaptureShown");
+  win.show();
+  win.focus();
+  if (win.webContents.isLoading()) win.webContents.once("did-finish-load", notify);
+  else notify();
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1100,
@@ -638,11 +717,35 @@ app.whenReady().then(async () => {
     isDark: nativeTheme.shouldUseDarkColors,
   }));
 
+  ipcMain.handle("brain:quickCapture", async (_e, text) => {
+    const res = await quickCapture(text);
+    if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+    if (res.ok) {
+      BrowserWindow.getAllWindows().forEach((w) => {
+        if (w !== captureWin) w.webContents.send("brain:changed", { paths: [res.relPath] });
+      });
+    }
+    return res;
+  });
+  ipcMain.on("brain:quickCaptureCancel", () => {
+    if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+  });
+
+  await ensureInboxCategory();
   createWindow();
   startWatcher();
+  createCaptureWindow();
+
+  const registered = globalShortcut.register(QUICK_CAPTURE_HOTKEY, showCaptureWindow);
+  if (!registered) console.warn("Failed to register quick-capture hotkey", QUICK_CAPTURE_HOTKEY);
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {
