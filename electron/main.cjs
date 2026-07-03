@@ -544,9 +544,11 @@ function showCaptureWindow() {
   const win = createCaptureWindow();
   if (win.isVisible()) { win.focus(); return; }
   win.center();
+  const notify = () => win.webContents.send("brain:quickCaptureShown");
   win.show();
   win.focus();
-  win.webContents.send("brain:quickCaptureShown");
+  if (win.webContents.isLoading()) win.webContents.once("did-finish-load", notify);
+  else notify();
 }
 
 function createWindow() {
