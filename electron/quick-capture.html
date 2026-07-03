@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Quick Capture</title>
+<style>
+  :root {
+    --bg: rgba(245,245,247,0.98);
+    --fg: #1d1d1f;
+    --muted: #86868b;
+    --border: rgba(0,0,0,0.08);
+    --accent: #0071e3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: rgba(30,30,30,0.98);
+      --fg: #f5f5f7;
+      --muted: #8e8e93;
+      --border: rgba(255,255,255,0.08);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; color: var(--fg); background: transparent; }
+  body {
+    display: flex; flex-direction: column;
+    background: var(--bg);
+    border-radius: 12px;
+    overflow: hidden;
+    -webkit-app-region: drag;
+    border: 1px solid var(--border);
+  }
+  .header {
+    padding: 8px 14px;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+  textarea {
+    -webkit-app-region: no-drag;
+    flex: 1;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 4px 16px 12px;
+    font: inherit;
+    font-size: 15px;
+    line-height: 1.45;
+    color: var(--fg);
+    background: transparent;
+  }
+  textarea::placeholder { color: var(--muted); }
+  .footer {
+    -webkit-app-region: no-drag;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .hint kbd {
+    font: inherit;
+    background: rgba(127,127,127,0.15);
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin: 0 1px;
+  }
+  button {
+    -webkit-app-region: no-drag;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    color: white;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    padding: 5px 12px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.4; cursor: default; }
+</style>
+</head>
+<body>
+  <div class="header">Quick Capture → Inbox</div>
+  <textarea id="ta" placeholder="Quick note…" spellcheck="true" autofocus></textarea>
+  <div class="footer">
+    <div class="hint"><kbd>⌘⏎</kbd> save · <kbd>Esc</kbd> cancel</div>
+    <button id="save">Save</button>
+  </div>
+
+<script>
+  const ta = document.getElementById("ta");
+  const btn = document.getElementById("save");
+
+  function focusField() {
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); });
+  }
+  focusField();
+  window.addEventListener("focus", focusField);
+  // Main process fires this after show()
+  window.brainCapture?.onShown?.(() => { ta.value = ""; focusField(); });
+
+  async function save() {
+    const text = ta.value.trim();
+    if (!text) { cancel(); return; }
+    btn.disabled = true;
+    try {
+      await window.brainCapture.save(text);
+      ta.value = "";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  function cancel() {
+    ta.value = "";
+    window.brainCapture.cancel();
+  }
+
+  btn.addEventListener("click", save);
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); cancel(); }
+    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+  });
+</script>
+</body>
+</html>
