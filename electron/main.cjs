@@ -718,6 +718,11 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:quickCapture", async (_e, text) => {
     const res = await quickCapture(text);
     if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+    if (res.ok) {
+      BrowserWindow.getAllWindows().forEach((w) => {
+        if (w !== captureWin) w.webContents.send("brain:changed", { paths: [res.relPath] });
+      });
+    }
     return res;
   });
   ipcMain.on("brain:quickCaptureCancel", () => {
