@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu, MenuItem, clipboard } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu, MenuItem, clipboard, globalShortcut } = require("electron");
 const path = require("path");
 const fs = require("fs/promises");
 const fssync = require("fs");
@@ -6,6 +6,10 @@ const fssync = require("fs");
 const TRASH = "Trash";
 const TRASH_SEP = "__";
 const CATEGORIES_FILE = ".categories.json";
+const INBOX = "Inbox";
+
+// Quick-capture global hotkey. Change here to rebind.
+const QUICK_CAPTURE_HOTKEY = "CommandOrControl+Shift+N";
 
 const DEFAULT_CATEGORIES = [
   { id: "Work", name: "Work", color: "#0071e3" },
