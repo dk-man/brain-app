@@ -476,6 +476,79 @@ function startWatcher() {
   }
 }
 
+async function ensureInboxCategory() {
+  const cats = await loadCategories();
+  if (!cats.find((c) => c.id.toLowerCase() === INBOX.toLowerCase())) {
+    cats.push({ id: INBOX, name: INBOX, color: "#af52de" });
+    await saveCategories(cats);
+  }
+  await fs.mkdir(path.join(rootDir(), INBOX), { recursive: true });
+}
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function timestampSlug(d = new Date()) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+async function quickCapture(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return { ok: false };
+  await ensureInboxCategory();
+  const firstLine = trimmed.split(/\r?\n/)[0].trim();
+  const derived = sanitize(firstLine.replace(/^#+\s*/, "").slice(0, 60) || "quick note");
+  const base = `${timestampSlug()}-${derived}`;
+  const dir = safeJoin(INBOX);
+  const target = await uniquePath(dir, base, ".md");
+  const now = new Date().toISOString();
+  const title = path.basename(target, ".md");
+  const fm = serializeFrontmatter({ title, tags: [], created: now, modified: now });
+  await writeFileTracked(target, fm + trimmed + "\n");
+  return { ok: true, relPath: path.relative(rootDir(), target) };
+}
+
+// ----- Quick-capture window -----
+let captureWin = null;
+function createCaptureWindow() {
+  if (captureWin && !captureWin.isDestroyed()) return captureWin;
+  captureWin = new BrowserWindow({
+    width: 600,
+    height: 200,
+    center: true,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    vibrancy: "under-window",
+    visualEffectState: "active",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "quick-capture-preload.cjs"),
+    },
+  });
+  captureWin.setAlwaysOnTop(true, "floating");
+  captureWin.loadFile(path.join(__dirname, "quick-capture.html"));
+  captureWin.on("blur", () => {
+    if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+  });
+  captureWin.on("closed", () => { captureWin = null; });
+  return captureWin;
+}
+
+function showCaptureWindow() {
+  const win = createCaptureWindow();
+  if (win.isVisible()) { win.focus(); return; }
+  win.center();
+  win.show();
+  win.focus();
+  win.webContents.send("brain:quickCaptureShown");
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1100,
