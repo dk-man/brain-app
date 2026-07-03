@@ -715,11 +715,30 @@ app.whenReady().then(async () => {
     isDark: nativeTheme.shouldUseDarkColors,
   }));
 
+  ipcMain.handle("brain:quickCapture", async (_e, text) => {
+    const res = await quickCapture(text);
+    if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+    return res;
+  });
+  ipcMain.on("brain:quickCaptureCancel", () => {
+    if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+  });
+
+  await ensureInboxCategory();
   createWindow();
   startWatcher();
+  createCaptureWindow();
+
+  const registered = globalShortcut.register(QUICK_CAPTURE_HOTKEY, showCaptureWindow);
+  if (!registered) console.warn("Failed to register quick-capture hotkey", QUICK_CAPTURE_HOTKEY);
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {
