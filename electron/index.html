@@ -617,6 +617,59 @@
       ::-webkit-scrollbar { width: 8px; height: 8px; }
       ::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
       .pane:hover ::-webkit-scrollbar-thumb { background: var(--border); }
+      .palette-overlay {
+        position: fixed; inset: 0;
+        background: var(--overlay);
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        z-index: 2500;
+        padding-top: 12vh;
+      }
+      .palette-overlay.open { display: flex; }
+      .palette {
+        width: 640px; max-width: 90vw;
+        background: var(--menu-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--menu-shadow);
+        overflow: hidden;
+        display: flex; flex-direction: column;
+        max-height: 70vh;
+      }
+      .palette-input {
+        border: none; outline: none; background: transparent;
+        color: var(--text);
+        font-family: inherit; font-size: 15px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .palette-filters {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 12px; color: var(--text-muted);
+      }
+      .palette-filters label {
+        display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+      }
+      .palette-list { overflow-y: auto; padding: 6px; }
+      .palette-item {
+        padding: 8px 10px; border-radius: 6px; cursor: pointer;
+      }
+      .palette-item.active { background: var(--selected); }
+      .palette-item .p-title { font-size: 13px; color: var(--text); font-weight: 500; }
+      .palette-item .p-cat { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
+      .palette-item .p-snippet {
+        font-size: 12px; color: var(--text-muted); margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .palette-item mark {
+        background: rgba(255, 204, 0, 0.35);
+        color: inherit; padding: 0 2px; border-radius: 2px;
+      }
+      .palette-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+      .palette-hint { margin-left: auto; }
     </style>
   </head>
   <body>
@@ -651,6 +704,17 @@
         <div class="editor-toolbar"></div>
         <div id="editorContent" class="empty">Select a note</div>
       </section>
+    </div>
+
+    <div class="palette-overlay" id="paletteOverlay" aria-hidden="true">
+      <div class="palette" role="dialog" aria-label="Search notes">
+        <input class="palette-input" id="paletteInput" type="text" placeholder="Search notes…" spellcheck="false" autocomplete="off" />
+        <div class="palette-filters">
+          <label><input type="checkbox" id="paletteTodoFilter" /> Has unchecked items</label>
+          <span class="palette-hint">↑↓ navigate · ↵ open · esc close</span>
+        </div>
+        <div class="palette-list" id="paletteList"></div>
+      </div>
     </div>
 
     <script>
@@ -1693,7 +1757,196 @@
           if (pending) return;
           await refresh();
         }, 250);
+        // Update the search index for the changed paths (fast, no full re-index)
+        reindexPaths(paths || []);
       });
+
+      // ---------- Command palette search ----------
+      const searchIndex = new Map(); // relPath -> { relPath, title, category, body, hasUnchecked }
+      let paletteOpen = false;
+      let paletteResults = [];
+      let paletteActiveIdx = 0;
+
+      function computeHasUnchecked(body) {
+        return /(^|\n)\s*[-*+]\s+\[ \]\s+/.test(body || "");
+      }
+
+      async function indexNote(n) {
+        try {
+          const r = await api.readNote(n.relPath);
+          const body = r.body || "";
+          searchIndex.set(n.relPath, {
+            relPath: n.relPath,
+            title: n.title || "",
+            category: n.category,
+            body,
+            hasUnchecked: computeHasUnchecked(body),
+          });
+        } catch {}
+      }
+
+      async function rebuildSearchIndex() {
+        const nonTrash = notes.filter(n => n.category !== TRASH);
+        const seen = new Set(nonTrash.map(n => n.relPath));
+        for (const k of [...searchIndex.keys()]) if (!seen.has(k)) searchIndex.delete(k);
+        const missing = nonTrash.filter(n => !searchIndex.has(n.relPath));
+        await Promise.all(missing.map(indexNote));
+        if (paletteOpen) renderPaletteResults();
+      }
+
+      async function reindexPaths(paths) {
+        for (const p of paths) {
+          const norm = p.split(/[\\\\/]/).join("/");
+          const n = notes.find(x => x.relPath.split(/[\\\\/]/).join("/") === norm);
+          if (!n || n.category === TRASH) { searchIndex.delete(p); continue; }
+          await indexNote(n);
+        }
+        if (paletteOpen) renderPaletteResults();
+      }
+
+      function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+      function paletteSearch(q, todoOnly) {
+        const items = [...searchIndex.values()];
+        const filtered = todoOnly ? items.filter(i => i.hasUnchecked) : items;
+        if (!q.trim()) {
+          return filtered
+            .slice()
+            .sort((a, b) => (a.title || "").localeCompare(b.title || ""))
+            .slice(0, 50)
+            .map(i => ({ ...i, matchIn: "none", matchIdx: -1, score: 0 }));
+        }
+        const needle = q.toLowerCase();
+        const scored = [];
+        for (const i of filtered) {
+          const t = (i.title || "").toLowerCase();
+          const b = (i.body || "").toLowerCase();
+          const ti = t.indexOf(needle);
+          const bi = b.indexOf(needle);
+          if (ti === -1 && bi === -1) continue;
+          const score = ti !== -1 ? 1000 - ti : 100 - Math.min(bi, 100);
+          scored.push({ ...i, matchIn: ti !== -1 ? "title" : "body", matchIdx: ti !== -1 ? ti : bi, score });
+        }
+        scored.sort((a, b) => b.score - a.score);
+        return scored.slice(0, 50);
+      }
+
+      function highlightMatch(text, q) {
+        if (!q) return escapeHtml(text);
+        const re = new RegExp(escapeRegex(q), "ig");
+        let last = 0, out = "", m;
+        while ((m = re.exec(text))) {
+          out += escapeHtml(text.slice(last, m.index)) + "<mark>" + escapeHtml(m[0]) + "</mark>";
+          last = m.index + m[0].length;
+          if (m[0].length === 0) re.lastIndex++;
+        }
+        out += escapeHtml(text.slice(last));
+        return out;
+      }
+
+      function snippetFor(body, idx, q) {
+        if (idx < 0) return "";
+        const start = Math.max(0, idx - 32);
+        const end = Math.min(body.length, idx + q.length + 80);
+        let s = body.slice(start, end).replace(/\s+/g, " ").trim();
+        if (start > 0) s = "…" + s;
+        if (end < body.length) s = s + "…";
+        return highlightMatch(s, q);
+      }
+
+      function renderPaletteResults() {
+        const q = $("paletteInput").value;
+        const todoOnly = $("paletteTodoFilter").checked;
+        paletteResults = paletteSearch(q, todoOnly);
+        if (paletteActiveIdx >= paletteResults.length) paletteActiveIdx = 0;
+        const list = $("paletteList");
+        if (!paletteResults.length) {
+          list.innerHTML = `<div class="palette-empty">${q || todoOnly ? "No matches" : "Type to search…"}</div>`;
+          return;
+        }
+        list.innerHTML = paletteResults.map((r, i) => {
+          const catName = catById(r.category)?.name || r.category;
+          let snippet = "";
+          if (r.matchIn === "body") snippet = snippetFor(r.body, r.matchIdx, q);
+          else {
+            const firstLine = (r.body || "").split("\n").find(l => l.trim()) || "";
+            snippet = escapeHtml(firstLine.slice(0, 140));
+          }
+          return `<div class="palette-item ${i === paletteActiveIdx ? "active" : ""}" data-idx="${i}">
+            <div><span class="p-title">${highlightMatch(r.title || "Untitled", q)}</span><span class="p-cat">${escapeHtml(catName)}</span></div>
+            ${snippet ? `<div class="p-snippet">${snippet}</div>` : ""}
+          </div>`;
+        }).join("");
+        list.querySelectorAll(".palette-item").forEach(el => {
+          el.onmouseenter = () => { paletteActiveIdx = +el.dataset.idx; updatePaletteActive(); };
+          el.onclick = () => { paletteActiveIdx = +el.dataset.idx; openPaletteSelection(); };
+        });
+        scrollPaletteActiveIntoView();
+      }
+
+      function updatePaletteActive() {
+        $("paletteList").querySelectorAll(".palette-item").forEach((el, i) => {
+          el.classList.toggle("active", i === paletteActiveIdx);
+        });
+        scrollPaletteActiveIntoView();
+      }
+      function scrollPaletteActiveIntoView() {
+        const el = $("paletteList").querySelector(".palette-item.active");
+        if (el) el.scrollIntoView({ block: "nearest" });
+      }
+
+      async function openPalette() {
+        paletteOpen = true;
+        $("paletteOverlay").classList.add("open");
+        $("paletteInput").value = "";
+        paletteActiveIdx = 0;
+        $("paletteInput").focus();
+        renderPaletteResults();
+        await rebuildSearchIndex();
+      }
+      function closePalette() {
+        paletteOpen = false;
+        $("paletteOverlay").classList.remove("open");
+      }
+
+      async function openPaletteSelection() {
+        const r = paletteResults[paletteActiveIdx];
+        if (!r) return;
+        closePalette();
+        await flushPending();
+        activeCategory = r.category;
+        activeId = r.relPath;
+        await render();
+      }
+
+      $("paletteInput").addEventListener("input", renderPaletteResults);
+      $("paletteTodoFilter").addEventListener("change", renderPaletteResults);
+      $("paletteInput").addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown") { e.preventDefault(); paletteActiveIdx = Math.min(paletteResults.length - 1, paletteActiveIdx + 1); updatePaletteActive(); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); paletteActiveIdx = Math.max(0, paletteActiveIdx - 1); updatePaletteActive(); }
+        else if (e.key === "Enter") { e.preventDefault(); openPaletteSelection(); }
+        else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
+      });
+      $("paletteOverlay").addEventListener("mousedown", (e) => {
+        if (e.target === $("paletteOverlay")) closePalette();
+      });
+      window.addEventListener("keydown", (e) => {
+        const mod = e.metaKey || e.ctrlKey;
+        if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          if (paletteOpen) closePalette(); else openPalette();
+        } else if (e.key === "Escape" && paletteOpen) {
+          e.preventDefault();
+          closePalette();
+        }
+      });
+
+      // Warm the search index once the vault is loaded
+      const _origRefresh = refresh;
+      refresh = async function(selectFirst) {
+        await _origRefresh(selectFirst);
+        rebuildSearchIndex();
+      };
 
       // Keep the "edited X ago" label fresh
       setInterval(() => {
