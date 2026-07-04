@@ -706,6 +706,17 @@
       </section>
     </div>
 
+    <div class="palette-overlay" id="paletteOverlay" aria-hidden="true">
+      <div class="palette" role="dialog" aria-label="Search notes">
+        <input class="palette-input" id="paletteInput" type="text" placeholder="Search notes…" spellcheck="false" autocomplete="off" />
+        <div class="palette-filters">
+          <label><input type="checkbox" id="paletteTodoFilter" /> Has unchecked items</label>
+          <span class="palette-hint">↑↓ navigate · ↵ open · esc close</span>
+        </div>
+        <div class="palette-list" id="paletteList"></div>
+      </div>
+    </div>
+
     <script>
       const TRASH = "Trash";
       const PRESET_COLORS = [
