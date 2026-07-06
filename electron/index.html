@@ -803,7 +803,8 @@
           ${categories.map(c => {
             const count = nonTrash.filter(n => n.category === c.id).length;
             return `
-              <div class="nav-item ${activeCategory === c.id ? 'active' : ''}" data-cat="${escapeAttr(c.id)}">
+              <div class="nav-item ${activeCategory === c.id ? 'active' : ''}" data-cat="${escapeAttr(c.id)}" data-cat-item="1">
+                <span class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>
                 <span class="dot" style="background:${escapeAttr(c.color)}"></span>
                 <span>${escapeHtml(c.name)}</span>
                 <span class="count">${count}</span>
@@ -820,7 +821,70 @@
         $("sidebar").querySelectorAll(".nav-item").forEach(el => {
           el.onclick = async () => { await flushPending(); activeCategory = el.dataset.cat; activeId = null; await refresh(true); };
         });
+        wireCategoryReorder();
         $("addCatBtn").onclick = (e) => { e.stopPropagation(); openNewCategoryModal(); };
+      }
+
+      const CAT_DRAG_MIME = "application/x-brain-category";
+      function clearCatDropMarkers() {
+        $("sidebar").querySelectorAll(".drop-before, .drop-after")
+          .forEach(x => x.classList.remove("drop-before", "drop-after"));
+      }
+      function wireCategoryReorder() {
+        const items = $("sidebar").querySelectorAll('.nav-item[data-cat-item="1"]');
+        items.forEach(el => {
+          const handle = el.querySelector(".drag-handle");
+          if (!handle) return;
+          // Only start a drag when the grip is grabbed — clicks on the row still navigate.
+          handle.addEventListener("mousedown", () => { el.draggable = true; });
+          handle.addEventListener("click", (e) => e.stopPropagation());
+          el.addEventListener("mouseup", () => { el.draggable = false; });
+          el.addEventListener("dragstart", (e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData(CAT_DRAG_MIME, el.dataset.cat);
+            el.classList.add("dragging");
+          });
+          el.addEventListener("dragend", () => {
+            el.draggable = false;
+            el.classList.remove("dragging");
+            clearCatDropMarkers();
+          });
+          el.addEventListener("dragover", (e) => {
+            if (!e.dataTransfer.types.includes(CAT_DRAG_MIME)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            const rect = el.getBoundingClientRect();
+            const before = (e.clientY - rect.top) < rect.height / 2;
+            clearCatDropMarkers();
+            el.classList.add(before ? "drop-before" : "drop-after");
+          });
+          el.addEventListener("dragleave", (e) => {
+            // only clear if leaving the element (not entering a child)
+            if (!el.contains(e.relatedTarget)) el.classList.remove("drop-before", "drop-after");
+          });
+          el.addEventListener("drop", async (e) => {
+            if (!e.dataTransfer.types.includes(CAT_DRAG_MIME)) return;
+            e.preventDefault();
+            const src = e.dataTransfer.getData(CAT_DRAG_MIME);
+            const before = el.classList.contains("drop-before");
+            clearCatDropMarkers();
+            if (!src || src === el.dataset.cat) return;
+            const ids = categories.map(c => c.id);
+            const from = ids.indexOf(src);
+            if (from < 0) return;
+            ids.splice(from, 1);
+            let to = ids.indexOf(el.dataset.cat);
+            if (to < 0) return;
+            ids.splice(before ? to : to + 1, 0, src);
+            try {
+              categories = await api.reorderCategories(ids);
+            } catch (err) {
+              console.warn("reorderCategories failed", err);
+              categories = await api.categories();
+            }
+            renderSidebar();
+          });
+        });
       }
 
       function visibleNotes() {
