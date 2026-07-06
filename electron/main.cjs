@@ -686,6 +686,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:list", () => listAll());
   ipcMain.handle("brain:categories", () => loadCategories());
   ipcMain.handle("brain:addCategory", (_e, payload) => addCategory(payload || {}));
+  ipcMain.handle("brain:reorderCategories", (_e, orderedIds) => reorderCategories(orderedIds));
   ipcMain.handle("brain:read", async (_e, relPath) => {
     // Legacy raw read (no frontmatter stripping). Kept for backward compat.
     return await readNoteRaw(relPath);
