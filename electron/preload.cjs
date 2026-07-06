@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("brainAPI", {
   list: () => ipcRenderer.invoke("brain:list"),
   categories: () => ipcRenderer.invoke("brain:categories"),
   addCategory: (name, color) => ipcRenderer.invoke("brain:addCategory", { name, color }),
+  reorderCategories: (orderedIds) => ipcRenderer.invoke("brain:reorderCategories", orderedIds),
   read: (relPath) => ipcRenderer.invoke("brain:read", relPath),
   readNote: (relPath) => ipcRenderer.invoke("brain:readNote", relPath),
   writeNote: (relPath, patch) => ipcRenderer.invoke("brain:writeNote", { relPath, ...patch }),
