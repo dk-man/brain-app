@@ -51,19 +51,67 @@ function sanitizeCategoryId(name) {
     .slice(0, 60);
 }
 
+async function listCategoryDirsOnDisk() {
+  try {
+    const entries = await fs.readdir(rootDir(), { withFileTypes: true });
+    return entries
+      .filter((e) => e.isDirectory() && e.name !== TRASH && !e.name.startsWith("."))
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
 async function loadCategories() {
   await fs.mkdir(rootDir(), { recursive: true });
+  let stored = null;
   try {
     const raw = await fs.readFile(categoriesFilePath(), "utf8");
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length) {
-      return parsed
+    if (Array.isArray(parsed)) {
+      stored = parsed
         .filter((c) => c && c.id && c.id !== TRASH)
         .map((c) => ({ id: c.id, name: c.name || c.id, color: c.color || "#8e8e93" }));
     }
   } catch {}
-  await saveCategories(DEFAULT_CATEGORIES);
-  return DEFAULT_CATEGORIES.slice();
+  if (!stored) {
+    await saveCategories(DEFAULT_CATEGORIES);
+    return DEFAULT_CATEGORIES.slice();
+  }
+  // Reconcile stored order with what's on disk: drop missing folders,
+  // append externally-created folders alphabetically at the end.
+  const diskDirs = await listCategoryDirsOnDisk();
+  const diskSet = new Set(diskDirs);
+  const kept = stored.filter((c) => diskSet.has(c.id));
+  const knownIds = new Set(kept.map((c) => c.id));
+  const extras = diskDirs
+    .filter((d) => !knownIds.has(d))
+    .sort((a, b) => a.localeCompare(b))
+    .map((d) => ({ id: d, name: d, color: "#8e8e93" }));
+  const final = [...kept, ...extras];
+  const changed =
+    final.length !== stored.length ||
+    final.some((c, i) => !stored[i] || stored[i].id !== c.id);
+  if (changed && final.length) await saveCategories(final);
+  return final.length ? final : stored;
+}
+
+async function reorderCategories(orderedIds) {
+  const cats = await loadCategories();
+  const byId = new Map(cats.map((c) => [c.id, c]));
+  const seen = new Set();
+  const ordered = [];
+  for (const id of Array.isArray(orderedIds) ? orderedIds : []) {
+    if (byId.has(id) && !seen.has(id)) {
+      ordered.push(byId.get(id));
+      seen.add(id);
+    }
+  }
+  for (const c of cats) {
+    if (!seen.has(c.id)) ordered.push(c);
+  }
+  await saveCategories(ordered);
+  return ordered;
 }
 
 async function saveCategories(cats) {
