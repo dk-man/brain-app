@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import brainScreenshot from "../assets/Brain_v0.3.png.asset.json";
 
 const GITHUB_URL = "https://github.com/dk-man/brain-app";
 const RELEASES_URL = "https://github.com/dk-man/brain-app/releases/latest";
@@ -86,6 +87,20 @@ function Landing() {
             >
               all releases
             </a>
+          </p>
+        </section>
+
+        <section className="mt-20">
+          <img
+            src={brainScreenshot.url}
+            alt="Brain app window showing a note with wikilinks, categories, and the quick-capture help note"
+            className="w-full rounded-lg border border-border bg-background shadow-sm"
+            loading="lazy"
+            width={1440}
+            height={900}
+          />
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Brain 0.3.0 — local Markdown notes, categories, wikilinks, and a dedicated Inbox.
           </p>
         </section>
 
