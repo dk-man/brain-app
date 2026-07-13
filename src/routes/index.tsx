@@ -91,6 +91,20 @@ function Landing() {
         </section>
 
         <section className="mt-20">
+          <img
+            src={brainScreenshot.url}
+            alt="Brain app window showing a note with wikilinks, categories, and the quick-capture help note"
+            className="w-full rounded-lg border border-border bg-background shadow-sm"
+            loading="lazy"
+            width={1440}
+            height={900}
+          />
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Brain 0.3.0 — local Markdown notes, categories, wikilinks, and a dedicated Inbox.
+          </p>
+        </section>
+
+        <section className="mt-20">
           <h2 className="text-2xl font-semibold tracking-tight">What makes Brain different</h2>
           <p className="mt-4 text-muted-foreground">
             Most note apps lock your thoughts inside a database or a cloud account. Brain does not.
