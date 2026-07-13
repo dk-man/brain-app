@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 const GITHUB_URL = "https://github.com/dk-man/brain-app";
 const RELEASES_URL = "https://github.com/dk-man/brain-app/releases/latest";
 const DOWNLOAD_URL =
-  "https://github.com/dk-man/brain-app/releases/download/v0.2.0/Brain-darwin-arm64-develop.zip";
+  "https://github.com/dk-man/brain-app/releases/download/v0.3.0/Brain-darwin-arm64-develop.zip";
 
 export const Route = createFileRoute("/")({
   head: () => ({
