@@ -1756,8 +1756,10 @@
           return s;
         };
         const isListLine = (l) => /^(\s*)([-*+]|\d+\.)\s+/.test(l);
+        const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+        const isTableSeparator = (l) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(l);
         const isBlankOrBreak = (l) =>
-          /^\s*$/.test(l) || /^#{1,6}\s/.test(l) || /^```/.test(l) || isListLine(l) || /^>\s?/.test(l) || /^(-\s*-\s*-+|\*\s*\*\s*\*+|_\s*_\s*_+)\s*$/.test(l);
+          /^\s*$/.test(l) || /^#{1,6}\s/.test(l) || /^```/.test(l) || isListLine(l) || /^>\s?/.test(l) || /^(-\s*-\s*-+|\*\s*\*\s*\*+|_\s*_\s*_+)\s*$/.test(l) || isTableRow(l);
         while (i < lines.length) {
           const line = lines[i];
           const fence = line.match(/^```(\w*)\s*$/);
@@ -1797,6 +1799,39 @@
               i++;
             }
             out.push(`<${tag}>${items.join("")}</${tag}>`);
+            continue;
+          }
+          if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+            const parseRow = (l) => {
+              let s = l.trim();
+              s = s.replace(/^\|/, "").replace(/\|$/, "");
+              return s.split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, "|"));
+            };
+            const parseAlign = (l) => {
+              let s = l.trim().replace(/^\|/, "").replace(/\|$/, "");
+              return s.split("|").map(c => {
+                const t = c.trim();
+                const L = t.startsWith(":");
+                const R = t.endsWith(":");
+                if (L && R) return "center";
+                if (R) return "right";
+                if (L) return "left";
+                return "";
+              });
+            };
+            const header = parseRow(line);
+            const aligns = parseAlign(lines[i + 1]);
+            i += 2;
+            const rows = [];
+            while (i < lines.length && isTableRow(lines[i]) && !isTableSeparator(lines[i])) {
+              rows.push(parseRow(lines[i])); i++;
+            }
+            const colCount = Math.max(header.length, ...rows.map(r => r.length));
+            const pad = (r) => { while (r.length < colCount) r.push(""); return r; };
+            const styleAttr = (idx) => aligns[idx] ? ` style="text-align:${aligns[idx]}"` : "";
+            const thead = "<thead><tr>" + pad(header).map((c, idx) => `<th${styleAttr(idx)}>${renderInline(c)}</th>`).join("") + "</tr></thead>";
+            const tbody = rows.length ? "<tbody>" + rows.map(r => "<tr>" + pad(r).map((c, idx) => `<td${styleAttr(idx)}>${renderInline(c)}</td>`).join("") + "</tr>").join("") + "</tbody>" : "";
+            out.push(`<table>${thead}${tbody}</table>`);
             continue;
           }
           if (/^\s*$/.test(line)) { i++; continue; }
