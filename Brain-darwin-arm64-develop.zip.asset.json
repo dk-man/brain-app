@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "asset_id": "8dd9810b-2dff-4ef5-9a85-c7c0bafa9e63",
+  "asset_id": "53583597-ebaf-4dcd-a69a-9f84a607fbc6",
   "project_id": "801c4594-de8c-4bd0-a0d2-fce6d5a2c78c",
-  "url": "/__l5e/assets-v1/8dd9810b-2dff-4ef5-9a85-c7c0bafa9e63/Brain-darwin-arm64-develop.zip",
-  "r2_key": "a/v1/801c4594-de8c-4bd0-a0d2-fce6d5a2c78c/8dd9810b-2dff-4ef5-9a85-c7c0bafa9e63/Brain-darwin-arm64-develop.zip",
+  "url": "/__l5e/assets-v1/53583597-ebaf-4dcd-a69a-9f84a607fbc6/Brain-darwin-arm64-develop.zip",
+  "r2_key": "a/v1/801c4594-de8c-4bd0-a0d2-fce6d5a2c78c/53583597-ebaf-4dcd-a69a-9f84a607fbc6/Brain-darwin-arm64-develop.zip",
   "original_filename": "Brain-darwin-arm64-develop.zip",
-  "size": 157635534,
+  "size": 157601304,
   "content_type": "application/zip",
-  "created_at": "2026-07-13T13:52:08Z"
+  "created_at": "2026-07-13T14:28:20Z"
 }
