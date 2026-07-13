@@ -1756,8 +1756,10 @@
           return s;
         };
         const isListLine = (l) => /^(\s*)([-*+]|\d+\.)\s+/.test(l);
+        const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+        const isTableSeparator = (l) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(l);
         const isBlankOrBreak = (l) =>
-          /^\s*$/.test(l) || /^#{1,6}\s/.test(l) || /^```/.test(l) || isListLine(l) || /^>\s?/.test(l) || /^(-\s*-\s*-+|\*\s*\*\s*\*+|_\s*_\s*_+)\s*$/.test(l);
+          /^\s*$/.test(l) || /^#{1,6}\s/.test(l) || /^```/.test(l) || isListLine(l) || /^>\s?/.test(l) || /^(-\s*-\s*-+|\*\s*\*\s*\*+|_\s*_\s*_+)\s*$/.test(l) || isTableRow(l);
         while (i < lines.length) {
           const line = lines[i];
           const fence = line.match(/^```(\w*)\s*$/);
