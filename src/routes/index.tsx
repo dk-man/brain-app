@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 const GITHUB_URL = "https://github.com/dk-man/brain-app";
 const RELEASES_URL = "https://github.com/dk-man/brain-app/releases/latest";
 const DOWNLOAD_URL =
-  "https://github.com/dk-man/brain-app/releases/download/v0.2.0/Brain-darwin-arm64-develop.zip";
+  "https://github.com/dk-man/brain-app/releases/download/v0.3.0/Brain-darwin-arm64-develop.zip";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -77,7 +77,7 @@ function Landing() {
           </div>
 
           <p className="mt-4 text-xs text-muted-foreground">
-            v0.2.0 · Apple Silicon · unsigned build ·{" "}
+            v0.3.0 · Apple Silicon · unsigned build ·{" "}
             <a href={RELEASES_URL} className="underline-offset-4 hover:text-foreground hover:underline">
               all releases
             </a>
