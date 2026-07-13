@@ -77,7 +77,7 @@ function Landing() {
           </div>
 
           <p className="mt-4 text-xs text-muted-foreground">
-            v0.2.0 · Apple Silicon · unsigned build ·{" "}
+            v0.3.0 · Apple Silicon · unsigned build ·{" "}
             <a href={RELEASES_URL} className="underline-offset-4 hover:text-foreground hover:underline">
               all releases
             </a>
