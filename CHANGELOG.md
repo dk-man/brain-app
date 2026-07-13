@@ -4,6 +4,33 @@ All notable changes to Brain are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-07-13
+
+### Added
+- **Global ⌘K search.** Fuzzy search across every note in the vault from a
+  single command palette. Matches note titles and body content, jumps
+  straight to the selected note on `Enter`.
+- **Quick capture hotkey.** A global system-wide hotkey pops up a small
+  always-on-top capture window from anywhere on macOS. Type a thought,
+  press `⌘⏎`, and it's appended to your Inbox note without switching
+  apps or losing focus of what you were doing.
+- **Reorderable sidebar categories.** Drag categories in the sidebar to
+  arrange them in whatever order fits your brain. Order is persisted in
+  an app-controlled config file (not in folder names or note contents),
+  so renaming a folder on disk doesn't disturb the ordering, and the
+  vault stays clean and Obsidian-compatible. The pinned Inbox and Trash
+  entries stay pinned; only user-created categories move. Dragging a
+  note onto a category still moves the note as before — the two
+  interactions don't interfere.
+- **Always-visible drag affordance.** Each category row shows a subtle
+  `⋮⋮` grip at rest so the reorder mechanic is discoverable without
+  hovering. The grip brightens on hover and while dragging.
+- **GFM tables in Read mode.** Pasting a table from ChatGPT, a webpage,
+  or any Markdown source now renders as a proper table in Read mode,
+  with per-column alignment preserved. Previously tables only rendered
+  correctly in Edit mode and collapsed into a paragraph in Read mode.
+
+
 ## [0.2.0] — 2026-06-28
 
 ### Added
