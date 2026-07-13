@@ -7,28 +7,42 @@ All notable changes to Brain are documented here. Format follows
 ## [0.3.0] — 2026-07-13
 
 ### Added
-- **Global ⌘K search.** Fuzzy search across every note in the vault from a
-  single command palette. Matches note titles and body content, jumps
-  straight to the selected note on `Enter`.
-- **Quick capture hotkey.** A global system-wide hotkey pops up a small
-  always-on-top capture window from anywhere on macOS. Type a thought,
-  press `⌘⏎`, and it's appended to your Inbox note without switching
-  apps or losing focus of what you were doing.
-- **Reorderable sidebar categories.** Drag categories in the sidebar to
-  arrange them in whatever order fits your brain. Order is persisted in
-  an app-controlled config file (not in folder names or note contents),
-  so renaming a folder on disk doesn't disturb the ordering, and the
-  vault stays clean and Obsidian-compatible. The pinned Inbox and Trash
-  entries stay pinned; only user-created categories move. Dragging a
-  note onto a category still moves the note as before — the two
-  interactions don't interfere.
-- **Always-visible drag affordance.** Each category row shows a subtle
-  `⋮⋮` grip at rest so the reorder mechanic is discoverable without
-  hovering. The grip brightens on hover and while dragging.
-- **GFM tables in Read mode.** Pasting a table from ChatGPT, a webpage,
-  or any Markdown source now renders as a proper table in Read mode,
-  with per-column alignment preserved. Previously tables only rendered
-  correctly in Edit mode and collapsed into a paragraph in Read mode.
+- **Global ⌘K search.** Open a single command palette from anywhere in the
+  app with `⌘K` and search across every note in the vault. Fuzzy matching
+  covers both note titles and body content, so you can find a note even
+  when you only remember a word from its contents. Select any result and
+  press `Enter` to jump straight to that note.
+- **Quick capture hotkey.** Capture a thought instantly without breaking
+  focus. Press the global `⌘⇧C` hotkey from any app on macOS to open a
+  small, always-on-top capture window. Type the note, press `⌘⏎`, and the
+  text is appended to a dedicated `Inbox` note inside your vault. The
+  window closes automatically and you return to whatever you were doing.
+  No need to switch to Brain first, no need to pick a category, no need
+  to create a file manually. This is designed for transient ideas — a
+  link, a sentence, a task — that you want to save now and organize later.
+  The `Inbox` note is created automatically if it doesn't exist.
+- **Reorderable sidebar categories.** Arrange categories in the sidebar in
+  the order that matches how you think. Drag any user-created category up
+  or down and the new order is saved immediately to an app-controlled
+  config file, so it survives across launches. The order is independent of
+  the underlying folder names on disk, which means renaming or moving a
+  folder on disk won't scramble your layout, and the vault remains fully
+  Obsidian-compatible. The `Inbox` and `Trash` entries remain pinned at
+  the top and bottom; only the user-created categories between them are
+  movable. The existing drag-a-note-onto-a-category behavior still works
+  exactly as before — the two drag interactions are handled separately.
+- **Always-visible drag affordance.** The category rows now show a subtle
+  `⋮⋮` grip at all times so the reorder mechanic is discoverable without
+  hovering. At rest the grip is low-opacity and quiet; it brightens on
+  hover and while dragging so the row still reads as a navigation item
+  first and a draggable handle second. The grip's space is reserved at
+  rest, so the layout doesn't shift when hover state changes.
+- **GFM tables in Read mode.** Tables written in GitHub-Flavored Markdown
+  now render correctly in Read mode, including per-column alignment
+  (`:---`, `:--:`, `---:`). Pasting a table from ChatGPT, a browser, or
+  another Markdown source will now display as a proper table instead of
+  collapsing into a single paragraph. Tables already rendered correctly
+  in Edit mode; this change brings Read mode to parity.
 
 
 ## [0.2.0] — 2026-06-28
