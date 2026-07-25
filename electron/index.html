@@ -1996,7 +1996,112 @@
         return out.join("\n");
       }
 
-      async function render() { renderSidebar(); renderList(); await renderEditor(); }
+      async function render() {
+        document.documentElement.setAttribute('data-view', activeView);
+        renderSidebar();
+        if (activeView === 'calendar') {
+          renderCalendar();
+        } else {
+          renderList();
+          await renderEditor();
+        }
+      }
+
+      function noteDateFor(n, field) {
+        const idx = searchIndex.get(n.relPath);
+        const iso = idx && idx[field];
+        if (iso) { const d = new Date(iso); if (!isNaN(d)) return d; }
+        if (field === 'modified' && n.updatedAt) return new Date(n.updatedAt);
+        return null;
+      }
+
+      function sameDay(a, b) {
+        return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      }
+
+      function renderCalendar() {
+        const pane = $("calendarPane");
+        const year = calendarMonth.getFullYear();
+        const month = calendarMonth.getMonth();
+        const monthLabel = calendarMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        const today = new Date();
+
+        // First cell = Sunday on or before day 1
+        const firstOfMonth = new Date(year, month, 1);
+        const startOffset = firstOfMonth.getDay();
+        const gridStart = new Date(year, month, 1 - startOffset);
+
+        // Bucket notes by yyyy-mm-dd
+        const buckets = new Map();
+        const nonTrash = notes.filter(n => n.category !== TRASH);
+        for (const n of nonTrash) {
+          const d = noteDateFor(n, calendarField);
+          if (!d) continue;
+          const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+          if (!buckets.has(key)) buckets.set(key, []);
+          buckets.get(key).push({ n, d });
+        }
+
+        const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        const weekdayHtml = weekdays.map(w => `<div class="cal-weekday">${w}</div>`).join('');
+
+        let cellsHtml = '';
+        for (let i = 0; i < 42; i++) {
+          const d = new Date(gridStart);
+          d.setDate(gridStart.getDate() + i);
+          const inMonth = d.getMonth() === month;
+          const isToday = sameDay(d, today);
+          const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+          const items = (buckets.get(key) || []).sort((a, b) => b.d - a.d);
+          const notesHtml = items.map(({ n }) => {
+            const cat = catById(n.category);
+            const color = cat?.color || '#8e8e93';
+            return `<div class="cal-note" data-id="${escapeAttr(n.relPath)}" title="${escapeAttr(n.title || 'Untitled')}"><span class="cat-dot" style="background:${escapeAttr(color)}"></span><span>${escapeHtml(n.title || 'Untitled')}</span></div>`;
+          }).join('');
+          cellsHtml += `
+            <div class="cal-day ${inMonth ? '' : 'other-month'} ${isToday ? 'today' : ''}">
+              <div class="cal-day-num">${d.getDate()}</div>
+              <div class="cal-day-notes">${notesHtml}</div>
+            </div>`;
+        }
+
+        pane.innerHTML = `
+          <div class="cal-header">
+            <button class="cal-nav-btn" id="calPrev" title="Previous month" aria-label="Previous month">‹</button>
+            <div class="cal-title">${monthLabel}</div>
+            <button class="cal-nav-btn" id="calNext" title="Next month" aria-label="Next month">›</button>
+            <button class="cal-today-btn" id="calToday">Today</button>
+            <div class="cal-field-toggle" role="tablist" aria-label="Date field">
+              <button class="${calendarField === 'modified' ? 'active' : ''}" data-field="modified">Modified</button>
+              <button class="${calendarField === 'created' ? 'active' : ''}" data-field="created">Created</button>
+            </div>
+          </div>
+          <div class="cal-weekdays">${weekdayHtml}</div>
+          <div class="cal-grid">${cellsHtml}</div>
+        `;
+
+        $("calPrev").onclick = () => { calendarMonth = new Date(year, month - 1, 1); renderCalendar(); };
+        $("calNext").onclick = () => { calendarMonth = new Date(year, month + 1, 1); renderCalendar(); };
+        $("calToday").onclick = () => {
+          const t = new Date(); t.setDate(1); t.setHours(0,0,0,0);
+          calendarMonth = t;
+          renderCalendar();
+        };
+        pane.querySelectorAll('.cal-field-toggle button').forEach(btn => {
+          btn.onclick = () => { calendarField = btn.dataset.field; renderCalendar(); };
+        });
+        pane.querySelectorAll('.cal-note').forEach(el => {
+          el.onclick = async () => {
+            const relPath = el.dataset.id;
+            const n = notes.find(x => x.relPath === relPath);
+            if (!n) return;
+            activeView = 'notes';
+            activeCategory = 'all';
+            activeId = relPath;
+            await render();
+          };
+        });
+      }
 
       $("newBtn").onclick = newNote;
       $("exportBtn").onclick = doExport;
