@@ -929,10 +929,14 @@
         const trashCount = notes.length - nonTrash.length;
         const html = `
           <div class="section-label">Library</div>
-          <div class="nav-item ${activeCategory === 'all' ? 'active' : ''}" data-cat="all">
+          <div class="nav-item ${activeView === 'notes' && activeCategory === 'all' ? 'active' : ''}" data-cat="all">
             <span class="dot" style="background:#8e8e93"></span>
             <span>All Notes</span>
             <span class="count">${nonTrash.length}</span>
+          </div>
+          <div class="nav-item ${activeView === 'calendar' ? 'active' : ''}" data-cat="__calendar__">
+            <span class="dot" style="background:#0071e3"></span>
+            <span>Calendar</span>
           </div>
           <div class="section-label" style="margin-top:12px">
             <span>Categories</span>
@@ -941,7 +945,7 @@
           ${categories.map(c => {
             const count = nonTrash.filter(n => n.category === c.id).length;
             return `
-              <div class="nav-item ${activeCategory === c.id ? 'active' : ''}" data-cat="${escapeAttr(c.id)}" data-cat-item="1">
+              <div class="nav-item ${activeView === 'notes' && activeCategory === c.id ? 'active' : ''}" data-cat="${escapeAttr(c.id)}" data-cat-item="1">
                 <span class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>
                 <span class="dot" style="background:${escapeAttr(c.color)}"></span>
                 <span>${escapeHtml(c.name)}</span>
@@ -949,7 +953,7 @@
               </div>`;
           }).join("")}
           <div class="section-label" style="margin-top:12px">Bin</div>
-          <div class="nav-item ${activeCategory === TRASH ? 'active' : ''}" data-cat="${TRASH}">
+          <div class="nav-item ${activeView === 'notes' && activeCategory === TRASH ? 'active' : ''}" data-cat="${TRASH}">
             <span class="dot" style="background:#c7c7cc"></span>
             <span>Trash</span>
             <span class="count">${trashCount}</span>
@@ -957,7 +961,17 @@
         `;
         $("sidebar").innerHTML = html;
         $("sidebar").querySelectorAll(".nav-item").forEach(el => {
-          el.onclick = async () => { await flushPending(); activeCategory = el.dataset.cat; activeId = null; await refresh(true); };
+          el.onclick = async () => {
+            await flushPending();
+            if (el.dataset.cat === '__calendar__') {
+              activeView = 'calendar';
+            } else {
+              activeView = 'notes';
+              activeCategory = el.dataset.cat;
+              activeId = null;
+            }
+            await refresh(true);
+          };
         });
         wireCategoryReorder();
         $("addCatBtn").onclick = (e) => { e.stopPropagation(); openNewCategoryModal(); };
