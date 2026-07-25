@@ -2052,6 +2052,8 @@
             title: n.title || "",
             category: n.category,
             body,
+            created: r.frontmatter?.created || null,
+            modified: r.frontmatter?.modified || null,
             hasUnchecked: computeHasUnchecked(body),
           });
         } catch {}
@@ -2064,6 +2066,7 @@
         const missing = nonTrash.filter(n => !searchIndex.has(n.relPath));
         await Promise.all(missing.map(indexNote));
         if (paletteOpen) renderPaletteResults();
+        if (activeView === 'calendar') renderCalendar();
       }
 
       async function reindexPaths(paths) {
