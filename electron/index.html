@@ -885,6 +885,9 @@
       let categories = [];
       let notes = [];
       let activeCategory = "all";
+      let activeView = "notes"; // 'notes' | 'calendar'
+      let calendarMonth = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; })();
+      let calendarField = "modified"; // 'modified' | 'created'
       let activeId = null;
       let saveTimer = null;
       let pending = null;
