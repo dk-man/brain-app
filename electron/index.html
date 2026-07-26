@@ -870,6 +870,17 @@
       .cal-note .cat-dot {
         width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
       }
+      .cal-note.scheduled {
+        background: color-mix(in oklab, var(--accent, #0071e3) 18%, var(--bg-elev));
+        border: 1px solid color-mix(in oklab, var(--accent, #0071e3) 45%, transparent);
+        padding-left: 4px;
+      }
+      .cal-note.scheduled .sched-glyph { font-size: 9px; opacity: 0.9; }
+      .cal-note[draggable="true"] { cursor: grab; }
+      .cal-day.drop-target {
+        background: color-mix(in oklab, var(--accent, #0071e3) 10%, var(--bg-elev));
+        border-color: var(--accent, #0071e3);
+      }
       .cal-empty-hint { color: var(--text-muted); font-size: 12px; padding: 12px; text-align: center; }
     </style>
   </head>
