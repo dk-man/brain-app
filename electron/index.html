@@ -1806,6 +1806,10 @@
           note.frontmatter = note.frontmatter || { tags: [], title: note.title };
           note.frontmatter.tags = patch.tags;
         }
+        if (patch.scheduled !== undefined) {
+          note.frontmatter = note.frontmatter || { tags: [], title: note.title };
+          note.frontmatter.scheduled = patch.scheduled || null;
+        }
         clearTimeout(saveTimer);
         saveTimer = setTimeout(flushPending, 500);
       }
