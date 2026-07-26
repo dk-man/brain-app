@@ -481,6 +481,52 @@
         font-size: 11px;
         color: var(--text-muted);
       }
+      .sched-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px 2px 8px;
+        font-size: 11px;
+        line-height: 1.6;
+        background: color-mix(in oklab, var(--accent, #0071e3) 12%, var(--bg-elev));
+        color: var(--text);
+        border-radius: 999px;
+        border: 1px solid color-mix(in oklab, var(--accent, #0071e3) 40%, var(--border));
+        user-select: none;
+      }
+      .sched-chip .glyph { font-size: 10px; opacity: 0.8; }
+      .sched-chip .x {
+        cursor: pointer;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1;
+        padding: 0 2px;
+        border-radius: 50%;
+      }
+      .sched-chip .x:hover { color: var(--text); background: var(--hover); }
+      .sched-btn {
+        background: none;
+        border: 1px dashed var(--border);
+        color: var(--text-muted);
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        position: relative;
+      }
+      .sched-btn:hover { color: var(--text); border-color: var(--text-muted); }
+      .sched-btn input[type="date"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        border: none;
+        padding: 0;
+      }
       .wikilink {
         color: var(--accent);
         cursor: pointer;
@@ -823,6 +869,17 @@
       .cal-note:hover { background: var(--accent, #0071e3); color: #fff; }
       .cal-note .cat-dot {
         width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+      }
+      .cal-note.scheduled {
+        background: color-mix(in oklab, var(--accent, #0071e3) 18%, var(--bg-elev));
+        border: 1px solid color-mix(in oklab, var(--accent, #0071e3) 45%, transparent);
+        padding-left: 4px;
+      }
+      .cal-note.scheduled .sched-glyph { font-size: 9px; opacity: 0.9; }
+      .cal-note[draggable="true"] { cursor: grab; }
+      .cal-day.drop-target {
+        background: color-mix(in oklab, var(--accent, #0071e3) 10%, var(--bg-elev));
+        border-color: var(--accent, #0071e3);
       }
       .cal-empty-hint { color: var(--text-muted); font-size: 12px; padding: 12px; text-align: center; }
     </style>
@@ -1373,10 +1430,18 @@
           `<span class="tag-chip" data-i="${i}">#${escapeHtml(t)}${readOnly ? "" : '<span class="x" data-remove="' + i + '" title="Remove tag">×</span>'}</span>`
         ).join("");
         const addBtn = readOnly ? "" : `<button class="tag-add" id="addTagBtn">+ tag</button>`;
+        const sched = note.frontmatter?.scheduled || null;
+        let schedHtml = "";
+        if (sched) {
+          const label = formatSchedLabel(sched);
+          schedHtml = `<span class="sched-chip" title="Scheduled ${escapeAttr(sched)}"><span class="glyph">◷</span>${escapeHtml(label)}${readOnly ? "" : '<span class="x" id="schedRemove" title="Clear scheduled date">×</span>'}</span>`;
+        } else if (!readOnly) {
+          schedHtml = `<button class="sched-btn" id="schedBtn" title="Schedule this note"><span class="glyph">◷</span>schedule<input type="date" id="schedInput" aria-label="Pick a scheduled date" /></button>`;
+        }
         const modified = note.frontmatter?.modified || new Date(note.updatedAt).toISOString();
-        bar.innerHTML = chips + addBtn + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
+        bar.innerHTML = chips + addBtn + schedHtml + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
         if (readOnly) return;
-        bar.querySelectorAll(".x").forEach(el => {
+        bar.querySelectorAll(".tag-chip .x").forEach(el => {
           el.onclick = (e) => {
             e.stopPropagation();
             const i = +el.dataset.remove;
@@ -1389,6 +1454,33 @@
         });
         const addBtnEl = $("addTagBtn");
         if (addBtnEl) addBtnEl.onclick = () => startAddTag(note, readOnly);
+        const schedInput = $("schedInput");
+        if (schedInput) {
+          schedInput.value = "";
+          schedInput.onchange = (e) => {
+            const v = e.target.value;
+            if (!v) return;
+            note.frontmatter = note.frontmatter || {};
+            note.frontmatter.scheduled = v;
+            renderMetaBar(note, readOnly);
+            queueSave({ scheduled: v });
+          };
+        }
+        const rm = $("schedRemove");
+        if (rm) rm.onclick = (e) => {
+          e.stopPropagation();
+          note.frontmatter.scheduled = null;
+          renderMetaBar(note, readOnly);
+          queueSave({ scheduled: null });
+        };
+      }
+
+      function formatSchedLabel(iso) {
+        // iso is YYYY-MM-DD; render as local date, avoiding timezone shift
+        const [y, m, d] = iso.split("-").map(Number);
+        const dt = new Date(y, (m || 1) - 1, d || 1);
+        if (isNaN(dt)) return iso;
+        return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
       }
 
       function startAddTag(note, readOnly) {
@@ -1714,6 +1806,10 @@
           note.frontmatter = note.frontmatter || { tags: [], title: note.title };
           note.frontmatter.tags = patch.tags;
         }
+        if (patch.scheduled !== undefined) {
+          note.frontmatter = note.frontmatter || { tags: [], title: note.title };
+          note.frontmatter.scheduled = patch.scheduled || null;
+        }
         clearTimeout(saveTimer);
         saveTimer = setTimeout(flushPending, 500);
       }
@@ -1728,6 +1824,7 @@
           const patch = {};
           if (p.body !== undefined) patch.body = note.body || "";
           if (p.tags !== undefined) patch.tags = note.frontmatter?.tags || [];
+          if (p.scheduled !== undefined) patch.scheduled = p.scheduled || null;
           if (Object.keys(patch).length > 0) {
             const res = await api.writeNote(note.relPath, patch);
             note.frontmatter = res.frontmatter;
@@ -2019,6 +2116,26 @@
         return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
       }
 
+      // Calendar source filter: 'both' | 'activity' | 'scheduled'
+      let calendarSource = 'both';
+      const SCHED_DRAG_MIME = "application/x-brain-schedule";
+
+      function scheduledDateFor(n) {
+        const idx = searchIndex.get(n.relPath);
+        const iso = idx && idx.scheduled;
+        if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+        const [y, m, d] = iso.split('-').map(Number);
+        const dt = new Date(y, m - 1, d);
+        return isNaN(dt) ? null : dt;
+      }
+
+      function toIsoDate(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+
       function renderCalendar() {
         const pane = $("calendarPane");
         const year = calendarMonth.getFullYear();
@@ -2026,20 +2143,41 @@
         const monthLabel = calendarMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
         const today = new Date();
 
-        // First cell = Sunday on or before day 1
         const firstOfMonth = new Date(year, month, 1);
         const startOffset = firstOfMonth.getDay();
         const gridStart = new Date(year, month, 1 - startOffset);
 
-        // Bucket notes by yyyy-mm-dd
+        // Bucket notes by yyyy-mm-dd. Kind: 'activity' | 'scheduled'.
+        // A note can appear as both on the same day (still shown once, marked scheduled).
         const buckets = new Map();
+        const seen = new Map(); // key -> Set(relPath) to dedupe scheduled+activity same day
+        function push(key, entry) {
+          if (!buckets.has(key)) { buckets.set(key, []); seen.set(key, new Map()); }
+          const seenMap = seen.get(key);
+          const prev = seenMap.get(entry.n.relPath);
+          if (prev) {
+            if (entry.kind === 'scheduled') prev.kind = 'scheduled';
+            return;
+          }
+          seenMap.set(entry.n.relPath, entry);
+          buckets.get(key).push(entry);
+        }
         const nonTrash = notes.filter(n => n.category !== TRASH);
         for (const n of nonTrash) {
-          const d = noteDateFor(n, calendarField);
-          if (!d) continue;
-          const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-          if (!buckets.has(key)) buckets.set(key, []);
-          buckets.get(key).push({ n, d });
+          if (calendarSource !== 'scheduled') {
+            const d = noteDateFor(n, calendarField);
+            if (d) {
+              const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+              push(key, { n, d, kind: 'activity' });
+            }
+          }
+          if (calendarSource !== 'activity') {
+            const s = scheduledDateFor(n);
+            if (s) {
+              const key = `${s.getFullYear()}-${s.getMonth()}-${s.getDate()}`;
+              push(key, { n, d: s, kind: 'scheduled' });
+            }
+          }
         }
 
         const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -2052,14 +2190,23 @@
           const inMonth = d.getMonth() === month;
           const isToday = sameDay(d, today);
           const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-          const items = (buckets.get(key) || []).sort((a, b) => b.d - a.d);
-          const notesHtml = items.map(({ n }) => {
+          const iso = toIsoDate(d);
+          const items = (buckets.get(key) || []).sort((a, b) => {
+            // scheduled first, then by date desc
+            if (a.kind !== b.kind) return a.kind === 'scheduled' ? -1 : 1;
+            return b.d - a.d;
+          });
+          const notesHtml = items.map(({ n, kind }) => {
             const cat = catById(n.category);
             const color = cat?.color || '#8e8e93';
-            return `<div class="cal-note" data-id="${escapeAttr(n.relPath)}" title="${escapeAttr(n.title || 'Untitled')}"><span class="cat-dot" style="background:${escapeAttr(color)}"></span><span>${escapeHtml(n.title || 'Untitled')}</span></div>`;
+            const isSched = kind === 'scheduled';
+            const cls = `cal-note${isSched ? ' scheduled' : ''}`;
+            const drag = isSched ? 'draggable="true"' : '';
+            const glyph = isSched ? '<span class="sched-glyph" title="Scheduled">◷</span>' : `<span class="cat-dot" style="background:${escapeAttr(color)}"></span>`;
+            return `<div class="${cls}" data-id="${escapeAttr(n.relPath)}" data-kind="${kind}" ${drag} title="${escapeAttr(n.title || 'Untitled')}${isSched ? ' — scheduled' : ''}">${glyph}<span>${escapeHtml(n.title || 'Untitled')}</span></div>`;
           }).join('');
           cellsHtml += `
-            <div class="cal-day ${inMonth ? '' : 'other-month'} ${isToday ? 'today' : ''}">
+            <div class="cal-day ${inMonth ? '' : 'other-month'} ${isToday ? 'today' : ''}" data-iso="${iso}">
               <div class="cal-day-num">${d.getDate()}</div>
               <div class="cal-day-notes">${notesHtml}</div>
             </div>`;
@@ -2071,7 +2218,12 @@
             <div class="cal-title">${monthLabel}</div>
             <button class="cal-nav-btn" id="calNext" title="Next month" aria-label="Next month">›</button>
             <button class="cal-today-btn" id="calToday">Today</button>
-            <div class="cal-field-toggle" role="tablist" aria-label="Date field">
+            <div class="cal-field-toggle" role="tablist" aria-label="Show" style="margin-left:auto">
+              <button class="${calendarSource === 'both' ? 'active' : ''}" data-source="both">Both</button>
+              <button class="${calendarSource === 'activity' ? 'active' : ''}" data-source="activity">Activity</button>
+              <button class="${calendarSource === 'scheduled' ? 'active' : ''}" data-source="scheduled">Scheduled</button>
+            </div>
+            <div class="cal-field-toggle" role="tablist" aria-label="Activity date field">
               <button class="${calendarField === 'modified' ? 'active' : ''}" data-field="modified">Modified</button>
               <button class="${calendarField === 'created' ? 'active' : ''}" data-field="created">Created</button>
             </div>
@@ -2087,11 +2239,14 @@
           calendarMonth = t;
           renderCalendar();
         };
-        pane.querySelectorAll('.cal-field-toggle button').forEach(btn => {
+        pane.querySelectorAll('[data-field]').forEach(btn => {
           btn.onclick = () => { calendarField = btn.dataset.field; renderCalendar(); };
         });
+        pane.querySelectorAll('[data-source]').forEach(btn => {
+          btn.onclick = () => { calendarSource = btn.dataset.source; renderCalendar(); };
+        });
         pane.querySelectorAll('.cal-note').forEach(el => {
-          el.onclick = async () => {
+          el.addEventListener('click', async (e) => {
             const relPath = el.dataset.id;
             const n = notes.find(x => x.relPath === relPath);
             if (!n) return;
@@ -2099,7 +2254,49 @@
             activeCategory = 'all';
             activeId = relPath;
             await render();
-          };
+          });
+          if (el.getAttribute('draggable') === 'true') {
+            el.addEventListener('dragstart', (e) => {
+              e.stopPropagation();
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData(SCHED_DRAG_MIME, el.dataset.id);
+              // also set a harmless text fallback (some platforms need any data)
+              try { e.dataTransfer.setData('text/plain', el.dataset.id); } catch {}
+            });
+          }
+        });
+        pane.querySelectorAll('.cal-day').forEach(cell => {
+          cell.addEventListener('dragover', (e) => {
+            if (!Array.from(e.dataTransfer.types).includes(SCHED_DRAG_MIME)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            cell.classList.add('drop-target');
+          });
+          cell.addEventListener('dragleave', () => cell.classList.remove('drop-target'));
+          cell.addEventListener('drop', async (e) => {
+            if (!Array.from(e.dataTransfer.types).includes(SCHED_DRAG_MIME)) return;
+            e.preventDefault();
+            cell.classList.remove('drop-target');
+            const relPath = e.dataTransfer.getData(SCHED_DRAG_MIME);
+            const iso = cell.dataset.iso;
+            if (!relPath || !iso) return;
+            const n = notes.find(x => x.relPath === relPath);
+            if (!n) return;
+            if ((n.frontmatter?.scheduled || null) === iso) return;
+            n.frontmatter = n.frontmatter || {};
+            n.frontmatter.scheduled = iso;
+            const idx = searchIndex.get(relPath);
+            if (idx) idx.scheduled = iso;
+            renderCalendar();
+            try {
+              const res = await api.writeNote(relPath, { scheduled: iso, bumpModified: false });
+              n.frontmatter = res.frontmatter;
+              const idx2 = searchIndex.get(relPath);
+              if (idx2) idx2.scheduled = res.frontmatter?.scheduled || null;
+            } catch (err) {
+              console.error('reschedule failed', err);
+            }
+          });
         });
       }
 
@@ -2152,6 +2349,7 @@
         try {
           const r = await api.readNote(n.relPath);
           const body = r.body || "";
+          if (!pending || pending._for !== n.relPath) n.frontmatter = r.frontmatter;
           searchIndex.set(n.relPath, {
             relPath: n.relPath,
             title: n.title || "",
@@ -2159,6 +2357,7 @@
             body,
             created: r.frontmatter?.created || null,
             modified: r.frontmatter?.modified || null,
+            scheduled: r.frontmatter?.scheduled || null,
             hasUnchecked: computeHasUnchecked(body),
           });
         } catch {}

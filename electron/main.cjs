@@ -223,6 +223,13 @@ function yamlEsc(s) {
   return str;
 }
 
+const SCHED_RE = /^\d{4}-\d{2}-\d{2}$/;
+function normScheduled(v) {
+  if (v == null || v === "") return null;
+  const s = String(v).trim();
+  return SCHED_RE.test(s) ? s : null;
+}
+
 function serializeFrontmatter(fm) {
   const tags = Array.isArray(fm.tags) ? fm.tags : [];
   const lines = [
@@ -231,6 +238,17 @@ function serializeFrontmatter(fm) {
     `created: ${fm.created}`,
     `modified: ${fm.modified}`,
   ];
+  const sched = normScheduled(fm.scheduled);
+  if (sched) lines.push(`scheduled: ${sched}`);
+  // preserve any other unknown keys so external edits aren't lost
+  const known = new Set(["title", "tags", "created", "modified", "scheduled"]);
+  for (const k of Object.keys(fm)) {
+    if (known.has(k)) continue;
+    const v = fm[k];
+    if (v == null) continue;
+    if (Array.isArray(v)) continue;
+    lines.push(`${k}: ${yamlEsc(v)}`);
+  }
   return `---\n${lines.join("\n")}\n---\n\n`;
 }
 
@@ -288,6 +306,8 @@ async function ensureFrontmatter(relPath) {
     created: parsed.fm?.created || created,
     modified: parsed.fm?.modified || modified,
   };
+  const passSched = normScheduled(parsed.fm?.scheduled);
+  if (passSched) merged.scheduled = passSched;
   const body = parsed.fm ? parsed.body : raw;
   const newRaw = serializeFrontmatter(merged) + body;
   await writeFileTracked(full, newRaw);
@@ -296,7 +316,7 @@ async function ensureFrontmatter(relPath) {
   return { frontmatter: merged, body, injected: true };
 }
 
-async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
+async function writeNote(relPath, { body, title, tags, scheduled, bumpModified = true }) {
   const full = safeJoin(relPath);
   let existing = { fm: null, body: "" };
   try {
@@ -310,6 +330,12 @@ async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
     created: existing.fm?.created || now,
     modified: bumpModified ? now : (existing.fm?.modified || now),
   };
+  // scheduled: undefined = keep existing; null/"" = clear; string = set
+  let nextSched;
+  if (scheduled === undefined) nextSched = normScheduled(existing.fm?.scheduled);
+  else if (scheduled === null || scheduled === "") nextSched = null;
+  else nextSched = normScheduled(scheduled);
+  if (nextSched) merged.scheduled = nextSched;
   const newBody = body !== undefined ? body : existing.body;
   const raw = serializeFrontmatter(merged) + newBody;
   await writeFileTracked(full, raw);
@@ -692,8 +718,8 @@ app.whenReady().then(async () => {
     return await readNoteRaw(relPath);
   });
   ipcMain.handle("brain:readNote", async (_e, relPath) => ensureFrontmatter(relPath));
-  ipcMain.handle("brain:writeNote", async (_e, { relPath, body, title, tags, bumpModified }) =>
-    writeNote(relPath, { body, title, tags, bumpModified }),
+  ipcMain.handle("brain:writeNote", async (_e, { relPath, body, title, tags, scheduled, bumpModified }) =>
+    writeNote(relPath, { body, title, tags, scheduled, bumpModified }),
   );
   ipcMain.handle("brain:write", async (_e, { relPath, body }) => {
     // Legacy: write raw body without touching frontmatter.
