@@ -1824,6 +1824,7 @@
           const patch = {};
           if (p.body !== undefined) patch.body = note.body || "";
           if (p.tags !== undefined) patch.tags = note.frontmatter?.tags || [];
+          if (p.scheduled !== undefined) patch.scheduled = p.scheduled || null;
           if (Object.keys(patch).length > 0) {
             const res = await api.writeNote(note.relPath, patch);
             note.frontmatter = res.frontmatter;
