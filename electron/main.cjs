@@ -316,7 +316,7 @@ async function ensureFrontmatter(relPath) {
   return { frontmatter: merged, body, injected: true };
 }
 
-async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
+async function writeNote(relPath, { body, title, tags, scheduled, bumpModified = true }) {
   const full = safeJoin(relPath);
   let existing = { fm: null, body: "" };
   try {
@@ -330,6 +330,12 @@ async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
     created: existing.fm?.created || now,
     modified: bumpModified ? now : (existing.fm?.modified || now),
   };
+  // scheduled: undefined = keep existing; null/"" = clear; string = set
+  let nextSched;
+  if (scheduled === undefined) nextSched = normScheduled(existing.fm?.scheduled);
+  else if (scheduled === null || scheduled === "") nextSched = null;
+  else nextSched = normScheduled(scheduled);
+  if (nextSched) merged.scheduled = nextSched;
   const newBody = body !== undefined ? body : existing.body;
   const raw = serializeFrontmatter(merged) + newBody;
   await writeFileTracked(full, raw);
