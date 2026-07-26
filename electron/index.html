@@ -2249,6 +2249,7 @@
         try {
           const r = await api.readNote(n.relPath);
           const body = r.body || "";
+          n.frontmatter = r.frontmatter;
           searchIndex.set(n.relPath, {
             relPath: n.relPath,
             title: n.title || "",
@@ -2256,6 +2257,7 @@
             body,
             created: r.frontmatter?.created || null,
             modified: r.frontmatter?.modified || null,
+            scheduled: r.frontmatter?.scheduled || null,
             hasUnchecked: computeHasUnchecked(body),
           });
         } catch {}
