@@ -1430,10 +1430,18 @@
           `<span class="tag-chip" data-i="${i}">#${escapeHtml(t)}${readOnly ? "" : '<span class="x" data-remove="' + i + '" title="Remove tag">×</span>'}</span>`
         ).join("");
         const addBtn = readOnly ? "" : `<button class="tag-add" id="addTagBtn">+ tag</button>`;
+        const sched = note.frontmatter?.scheduled || null;
+        let schedHtml = "";
+        if (sched) {
+          const label = formatSchedLabel(sched);
+          schedHtml = `<span class="sched-chip" title="Scheduled ${escapeAttr(sched)}"><span class="glyph">◷</span>${escapeHtml(label)}${readOnly ? "" : '<span class="x" id="schedRemove" title="Clear scheduled date">×</span>'}</span>`;
+        } else if (!readOnly) {
+          schedHtml = `<button class="sched-btn" id="schedBtn" title="Schedule this note"><span class="glyph">◷</span>schedule<input type="date" id="schedInput" aria-label="Pick a scheduled date" /></button>`;
+        }
         const modified = note.frontmatter?.modified || new Date(note.updatedAt).toISOString();
-        bar.innerHTML = chips + addBtn + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
+        bar.innerHTML = chips + addBtn + schedHtml + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
         if (readOnly) return;
-        bar.querySelectorAll(".x").forEach(el => {
+        bar.querySelectorAll(".tag-chip .x").forEach(el => {
           el.onclick = (e) => {
             e.stopPropagation();
             const i = +el.dataset.remove;
@@ -1446,6 +1454,33 @@
         });
         const addBtnEl = $("addTagBtn");
         if (addBtnEl) addBtnEl.onclick = () => startAddTag(note, readOnly);
+        const schedInput = $("schedInput");
+        if (schedInput) {
+          schedInput.value = "";
+          schedInput.onchange = (e) => {
+            const v = e.target.value;
+            if (!v) return;
+            note.frontmatter = note.frontmatter || {};
+            note.frontmatter.scheduled = v;
+            renderMetaBar(note, readOnly);
+            queueSave({ scheduled: v });
+          };
+        }
+        const rm = $("schedRemove");
+        if (rm) rm.onclick = (e) => {
+          e.stopPropagation();
+          note.frontmatter.scheduled = null;
+          renderMetaBar(note, readOnly);
+          queueSave({ scheduled: null });
+        };
+      }
+
+      function formatSchedLabel(iso) {
+        // iso is YYYY-MM-DD; render as local date, avoiding timezone shift
+        const [y, m, d] = iso.split("-").map(Number);
+        const dt = new Date(y, (m || 1) - 1, d || 1);
+        if (isNaN(dt)) return iso;
+        return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
       }
 
       function startAddTag(note, readOnly) {
