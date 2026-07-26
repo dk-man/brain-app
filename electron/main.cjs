@@ -718,8 +718,8 @@ app.whenReady().then(async () => {
     return await readNoteRaw(relPath);
   });
   ipcMain.handle("brain:readNote", async (_e, relPath) => ensureFrontmatter(relPath));
-  ipcMain.handle("brain:writeNote", async (_e, { relPath, body, title, tags, bumpModified }) =>
-    writeNote(relPath, { body, title, tags, bumpModified }),
+  ipcMain.handle("brain:writeNote", async (_e, { relPath, body, title, tags, scheduled, bumpModified }) =>
+    writeNote(relPath, { body, title, tags, scheduled, bumpModified }),
   );
   ipcMain.handle("brain:write", async (_e, { relPath, body }) => {
     // Legacy: write raw body without touching frontmatter.
