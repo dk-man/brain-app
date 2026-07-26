@@ -2249,7 +2249,7 @@
         try {
           const r = await api.readNote(n.relPath);
           const body = r.body || "";
-          n.frontmatter = r.frontmatter;
+          if (!pending || pending._for !== n.relPath) n.frontmatter = r.frontmatter;
           searchIndex.set(n.relPath, {
             relPath: n.relPath,
             title: n.title || "",
