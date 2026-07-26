@@ -223,6 +223,13 @@ function yamlEsc(s) {
   return str;
 }
 
+const SCHED_RE = /^\d{4}-\d{2}-\d{2}$/;
+function normScheduled(v) {
+  if (v == null || v === "") return null;
+  const s = String(v).trim();
+  return SCHED_RE.test(s) ? s : null;
+}
+
 function serializeFrontmatter(fm) {
   const tags = Array.isArray(fm.tags) ? fm.tags : [];
   const lines = [
@@ -231,6 +238,17 @@ function serializeFrontmatter(fm) {
     `created: ${fm.created}`,
     `modified: ${fm.modified}`,
   ];
+  const sched = normScheduled(fm.scheduled);
+  if (sched) lines.push(`scheduled: ${sched}`);
+  // preserve any other unknown keys so external edits aren't lost
+  const known = new Set(["title", "tags", "created", "modified", "scheduled"]);
+  for (const k of Object.keys(fm)) {
+    if (known.has(k)) continue;
+    const v = fm[k];
+    if (v == null) continue;
+    if (Array.isArray(v)) continue;
+    lines.push(`${k}: ${yamlEsc(v)}`);
+  }
   return `---\n${lines.join("\n")}\n---\n\n`;
 }
 
