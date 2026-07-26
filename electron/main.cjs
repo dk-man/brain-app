@@ -306,6 +306,8 @@ async function ensureFrontmatter(relPath) {
     created: parsed.fm?.created || created,
     modified: parsed.fm?.modified || modified,
   };
+  const passSched = normScheduled(parsed.fm?.scheduled);
+  if (passSched) merged.scheduled = passSched;
   const body = parsed.fm ? parsed.body : raw;
   const newRaw = serializeFrontmatter(merged) + body;
   await writeFileTracked(full, newRaw);
