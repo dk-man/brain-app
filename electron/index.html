@@ -1435,9 +1435,12 @@
         let schedHtml = "";
         if (sched) {
           const label = formatSchedLabel(sched);
-          schedHtml = `<span class="sched-chip" title="Scheduled ${escapeAttr(sched)}"><span class="glyph">◷</span>${escapeHtml(label)}${readOnly ? "" : '<span class="x" id="schedRemove" title="Clear scheduled date">×</span>'}</span>`;
+          schedHtml = `<span class="sched-chip" id="schedChip" title="Scheduled ${escapeAttr(sched)} — click to change"><span class="glyph">◷</span>${escapeHtml(label)}${readOnly ? "" : '<span class="x" id="schedRemove" title="Clear scheduled date">×</span>'}</span>`;
         } else if (!readOnly) {
-          schedHtml = `<button class="sched-btn" id="schedBtn" title="Schedule this note"><span class="glyph">◷</span>schedule<input type="date" id="schedInput" aria-label="Pick a scheduled date" /></button>`;
+          schedHtml = `<button class="sched-btn" id="schedBtn" title="Schedule this note"><span class="glyph">◷</span>schedule</button>`;
+        }
+        if (!readOnly) {
+          schedHtml += `<input type="date" id="schedInput" class="sched-hidden-input" aria-label="Pick a scheduled date" tabindex="-1" />`;
         }
         const modified = note.frontmatter?.modified || new Date(note.updatedAt).toISOString();
         bar.innerHTML = chips + addBtn + schedHtml + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
@@ -1456,8 +1459,16 @@
         const addBtnEl = $("addTagBtn");
         if (addBtnEl) addBtnEl.onclick = () => startAddTag(note, readOnly);
         const schedInput = $("schedInput");
+        const openPicker = () => {
+          if (!schedInput) return;
+          schedInput.value = sched || "";
+          if (typeof schedInput.showPicker === "function") {
+            try { schedInput.showPicker(); return; } catch {}
+          }
+          schedInput.focus();
+          schedInput.click();
+        };
         if (schedInput) {
-          schedInput.value = "";
           schedInput.onchange = (e) => {
             const v = e.target.value;
             if (!v) return;
@@ -1467,6 +1478,13 @@
             queueSave({ scheduled: v });
           };
         }
+        const schedBtn = $("schedBtn");
+        if (schedBtn) schedBtn.onclick = (e) => { e.preventDefault(); openPicker(); };
+        const schedChip = $("schedChip");
+        if (schedChip) schedChip.onclick = (e) => {
+          if (e.target.closest("#schedRemove")) return;
+          openPicker();
+        };
         const rm = $("schedRemove");
         if (rm) rm.onclick = (e) => {
           e.stopPropagation();
