@@ -493,6 +493,7 @@
         border-radius: 999px;
         border: 1px solid color-mix(in oklab, var(--accent, #0071e3) 40%, var(--border));
         user-select: none;
+        cursor: pointer;
       }
       .sched-chip .glyph { font-size: 10px; opacity: 0.8; }
       .sched-chip .x {
@@ -519,13 +520,13 @@
         position: relative;
       }
       .sched-btn:hover { color: var(--text); border-color: var(--text-muted); }
-      .sched-btn input[type="date"] {
+      .sched-hidden-input {
         position: absolute;
-        inset: 0;
+        left: -9999px;
+        width: 1px;
+        height: 1px;
         opacity: 0;
-        cursor: pointer;
-        border: none;
-        padding: 0;
+        pointer-events: none;
       }
       .wikilink {
         color: var(--accent);
