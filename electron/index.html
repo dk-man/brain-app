@@ -2376,7 +2376,7 @@
           renderCalendar();
         };
         pane.querySelectorAll('[data-field]').forEach(btn => {
-          btn.onclick = () => { calendarField = btn.dataset.field; renderCalendar(); };
+          btn.onclick = () => { if (btn.disabled) return; calendarField = btn.dataset.field; renderCalendar(); };
         });
         pane.querySelectorAll('[data-source]').forEach(btn => {
           btn.onclick = () => { calendarSource = btn.dataset.source; renderCalendar(); };
