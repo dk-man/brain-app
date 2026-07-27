@@ -493,6 +493,7 @@
         border-radius: 999px;
         border: 1px solid color-mix(in oklab, var(--accent, #0071e3) 40%, var(--border));
         user-select: none;
+        cursor: pointer;
       }
       .sched-chip .glyph { font-size: 10px; opacity: 0.8; }
       .sched-chip .x {
@@ -519,13 +520,13 @@
         position: relative;
       }
       .sched-btn:hover { color: var(--text); border-color: var(--text-muted); }
-      .sched-btn input[type="date"] {
+      .sched-hidden-input {
         position: absolute;
-        inset: 0;
+        left: -9999px;
+        width: 1px;
+        height: 1px;
         opacity: 0;
-        cursor: pointer;
-        border: none;
-        padding: 0;
+        pointer-events: none;
       }
       .wikilink {
         color: var(--accent);
@@ -802,6 +803,8 @@
         background: var(--accent, #0071e3);
         color: #fff;
       }
+      .cal-field-toggle.disabled { opacity: 0.4; }
+      .cal-field-toggle.disabled button { cursor: not-allowed; }
       .cal-weekdays {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
@@ -818,7 +821,7 @@
       .cal-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        grid-auto-rows: minmax(96px, 1fr);
+        grid-template-rows: repeat(6, minmax(0, 1fr));
         gap: 4px;
         flex: 1;
         min-height: 0;
@@ -832,6 +835,8 @@
         flex-direction: column;
         background: var(--bg-elev);
         min-height: 0;
+        min-width: 0;
+        position: relative;
       }
       .cal-day.other-month { opacity: 0.4; }
       .cal-day.today {
@@ -843,14 +848,16 @@
         font-weight: 500;
         color: var(--text-muted);
         margin-bottom: 4px;
+        flex-shrink: 0;
       }
       .cal-day.today .cal-day-num { color: var(--accent, #0071e3); font-weight: 700; }
       .cal-day-notes {
         display: flex;
         flex-direction: column;
         gap: 2px;
-        overflow-y: auto;
+        overflow: hidden;
         min-height: 0;
+        flex: 1;
       }
       .cal-note {
         font-size: 11px;
@@ -859,12 +866,18 @@
         background: var(--hover);
         color: var(--text);
         cursor: pointer;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
         display: flex;
         align-items: center;
         gap: 4px;
+        min-width: 0;
+        flex-shrink: 0;
+      }
+      .cal-note > span:not(.cat-dot):not(.sched-glyph) {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+        flex: 1;
       }
       .cal-note:hover { background: var(--accent, #0071e3); color: #fff; }
       .cal-note .cat-dot {
@@ -877,11 +890,46 @@
       }
       .cal-note.scheduled .sched-glyph { font-size: 9px; opacity: 0.9; }
       .cal-note[draggable="true"] { cursor: grab; }
+      .cal-more {
+        font-size: 10px;
+        color: var(--text-muted);
+        padding: 1px 6px;
+        cursor: pointer;
+        border-radius: 4px;
+        flex-shrink: 0;
+      }
+      .cal-more:hover { background: var(--hover); color: var(--text); }
       .cal-day.drop-target {
         background: color-mix(in oklab, var(--accent, #0071e3) 10%, var(--bg-elev));
         border-color: var(--accent, #0071e3);
       }
       .cal-empty-hint { color: var(--text-muted); font-size: 12px; padding: 12px; text-align: center; }
+      .cal-popover-backdrop {
+        position: fixed; inset: 0; z-index: 60;
+      }
+      .cal-popover {
+        position: fixed;
+        z-index: 61;
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+        padding: 8px;
+        min-width: 200px;
+        max-width: 280px;
+        max-height: 320px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .cal-popover-title {
+        font-size: 11px;
+        color: var(--text-muted);
+        padding: 2px 6px 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
     </style>
   </head>
   <body>
@@ -1434,9 +1482,12 @@
         let schedHtml = "";
         if (sched) {
           const label = formatSchedLabel(sched);
-          schedHtml = `<span class="sched-chip" title="Scheduled ${escapeAttr(sched)}"><span class="glyph">◷</span>${escapeHtml(label)}${readOnly ? "" : '<span class="x" id="schedRemove" title="Clear scheduled date">×</span>'}</span>`;
+          schedHtml = `<span class="sched-chip" id="schedChip" title="Scheduled ${escapeAttr(sched)} — click to change"><span class="glyph">◷</span>${escapeHtml(label)}${readOnly ? "" : '<span class="x" id="schedRemove" title="Clear scheduled date">×</span>'}</span>`;
         } else if (!readOnly) {
-          schedHtml = `<button class="sched-btn" id="schedBtn" title="Schedule this note"><span class="glyph">◷</span>schedule<input type="date" id="schedInput" aria-label="Pick a scheduled date" /></button>`;
+          schedHtml = `<button class="sched-btn" id="schedBtn" title="Schedule this note"><span class="glyph">◷</span>schedule</button>`;
+        }
+        if (!readOnly) {
+          schedHtml += `<input type="date" id="schedInput" class="sched-hidden-input" aria-label="Pick a scheduled date" tabindex="-1" />`;
         }
         const modified = note.frontmatter?.modified || new Date(note.updatedAt).toISOString();
         bar.innerHTML = chips + addBtn + schedHtml + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
@@ -1455,8 +1506,16 @@
         const addBtnEl = $("addTagBtn");
         if (addBtnEl) addBtnEl.onclick = () => startAddTag(note, readOnly);
         const schedInput = $("schedInput");
+        const openPicker = () => {
+          if (!schedInput) return;
+          schedInput.value = sched || "";
+          if (typeof schedInput.showPicker === "function") {
+            try { schedInput.showPicker(); return; } catch {}
+          }
+          schedInput.focus();
+          schedInput.click();
+        };
         if (schedInput) {
-          schedInput.value = "";
           schedInput.onchange = (e) => {
             const v = e.target.value;
             if (!v) return;
@@ -1466,6 +1525,13 @@
             queueSave({ scheduled: v });
           };
         }
+        const schedBtn = $("schedBtn");
+        if (schedBtn) schedBtn.onclick = (e) => { e.preventDefault(); openPicker(); };
+        const schedChip = $("schedChip");
+        if (schedChip) schedChip.onclick = (e) => {
+          if (e.target.closest("#schedRemove")) return;
+          openPicker();
+        };
         const rm = $("schedRemove");
         if (rm) rm.onclick = (e) => {
           e.stopPropagation();
@@ -2144,7 +2210,8 @@
         const today = new Date();
 
         const firstOfMonth = new Date(year, month, 1);
-        const startOffset = firstOfMonth.getDay();
+        // Monday-first: Sun=0 -> 6, Mon=1 -> 0, ...
+        const startOffset = (firstOfMonth.getDay() + 6) % 7;
         const gridStart = new Date(year, month, 1 - startOffset);
 
         // Bucket notes by yyyy-mm-dd. Kind: 'activity' | 'scheduled'.
@@ -2180,8 +2247,19 @@
           }
         }
 
-        const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        const weekdays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
         const weekdayHtml = weekdays.map(w => `<div class="cal-weekday">${w}</div>`).join('');
+
+        const MAX_VISIBLE = 3;
+        const noteItemHtml = ({ n, kind }) => {
+          const cat = catById(n.category);
+          const color = cat?.color || '#8e8e93';
+          const isSched = kind === 'scheduled';
+          const cls = `cal-note${isSched ? ' scheduled' : ''}`;
+          const drag = isSched ? 'draggable="true"' : '';
+          const glyph = isSched ? '<span class="sched-glyph" title="Scheduled">◷</span>' : `<span class="cat-dot" style="background:${escapeAttr(color)}"></span>`;
+          return `<div class="${cls}" data-id="${escapeAttr(n.relPath)}" data-kind="${kind}" ${drag} title="${escapeAttr(n.title || 'Untitled')}${isSched ? ' — scheduled' : ''}">${glyph}<span>${escapeHtml(n.title || 'Untitled')}</span></div>`;
+        };
 
         let cellsHtml = '';
         for (let i = 0; i < 42; i++) {
@@ -2196,22 +2274,20 @@
             if (a.kind !== b.kind) return a.kind === 'scheduled' ? -1 : 1;
             return b.d - a.d;
           });
-          const notesHtml = items.map(({ n, kind }) => {
-            const cat = catById(n.category);
-            const color = cat?.color || '#8e8e93';
-            const isSched = kind === 'scheduled';
-            const cls = `cal-note${isSched ? ' scheduled' : ''}`;
-            const drag = isSched ? 'draggable="true"' : '';
-            const glyph = isSched ? '<span class="sched-glyph" title="Scheduled">◷</span>' : `<span class="cat-dot" style="background:${escapeAttr(color)}"></span>`;
-            return `<div class="${cls}" data-id="${escapeAttr(n.relPath)}" data-kind="${kind}" ${drag} title="${escapeAttr(n.title || 'Untitled')}${isSched ? ' — scheduled' : ''}">${glyph}<span>${escapeHtml(n.title || 'Untitled')}</span></div>`;
-          }).join('');
+          const visible = items.slice(0, MAX_VISIBLE);
+          const hidden = items.length - visible.length;
+          const notesHtml = visible.map(noteItemHtml).join('');
+          const moreHtml = hidden > 0
+            ? `<div class="cal-more" data-more="${iso}">+${hidden} more</div>`
+            : '';
           cellsHtml += `
             <div class="cal-day ${inMonth ? '' : 'other-month'} ${isToday ? 'today' : ''}" data-iso="${iso}">
               <div class="cal-day-num">${d.getDate()}</div>
-              <div class="cal-day-notes">${notesHtml}</div>
+              <div class="cal-day-notes">${notesHtml}${moreHtml}</div>
             </div>`;
         }
 
+        const fieldDisabled = calendarSource === 'scheduled';
         pane.innerHTML = `
           <div class="cal-header">
             <button class="cal-nav-btn" id="calPrev" title="Previous month" aria-label="Previous month">‹</button>
@@ -2223,14 +2299,74 @@
               <button class="${calendarSource === 'activity' ? 'active' : ''}" data-source="activity">Activity</button>
               <button class="${calendarSource === 'scheduled' ? 'active' : ''}" data-source="scheduled">Scheduled</button>
             </div>
-            <div class="cal-field-toggle" role="tablist" aria-label="Activity date field">
-              <button class="${calendarField === 'modified' ? 'active' : ''}" data-field="modified">Modified</button>
-              <button class="${calendarField === 'created' ? 'active' : ''}" data-field="created">Created</button>
+            <div class="cal-field-toggle ${fieldDisabled ? 'disabled' : ''}" role="tablist" aria-label="Activity date field" title="${fieldDisabled ? 'Not applicable in Scheduled view' : ''}">
+              <button class="${calendarField === 'modified' ? 'active' : ''}" data-field="modified" ${fieldDisabled ? 'disabled aria-disabled="true"' : ''}>Modified</button>
+              <button class="${calendarField === 'created' ? 'active' : ''}" data-field="created" ${fieldDisabled ? 'disabled aria-disabled="true"' : ''}>Created</button>
             </div>
           </div>
           <div class="cal-weekdays">${weekdayHtml}</div>
           <div class="cal-grid">${cellsHtml}</div>
         `;
+
+        // Popover for "+N more"
+        function closePopover() {
+          document.querySelectorAll('.cal-popover, .cal-popover-backdrop').forEach(el => el.remove());
+        }
+        pane.querySelectorAll('.cal-more').forEach(m => {
+          m.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closePopover();
+            const iso = m.dataset.more;
+            const cell = m.closest('.cal-day');
+            const key = (() => {
+              const [y, mo, da] = iso.split('-').map(Number);
+              return `${y}-${mo - 1}-${da}`;
+            })();
+            const items = (buckets.get(key) || []).sort((a, b) => {
+              if (a.kind !== b.kind) return a.kind === 'scheduled' ? -1 : 1;
+              return b.d - a.d;
+            });
+            const backdrop = document.createElement('div');
+            backdrop.className = 'cal-popover-backdrop';
+            backdrop.onclick = closePopover;
+            const pop = document.createElement('div');
+            pop.className = 'cal-popover';
+            const [y, mo, da] = iso.split('-').map(Number);
+            const dt = new Date(y, mo - 1, da);
+            pop.innerHTML = `<div class="cal-popover-title">${escapeHtml(dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }))}</div>` + items.map(noteItemHtml).join('');
+            document.body.appendChild(backdrop);
+            document.body.appendChild(pop);
+            const rect = cell.getBoundingClientRect();
+            const popW = 240;
+            let left = rect.left;
+            if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+            let top = rect.bottom + 4;
+            const popH = Math.min(320, 40 + items.length * 22);
+            if (top + popH > window.innerHeight - 8) top = Math.max(8, rect.top - popH - 4);
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+            pop.querySelectorAll('.cal-note').forEach(el => {
+              el.addEventListener('click', async () => {
+                const relPath = el.dataset.id;
+                const n = notes.find(x => x.relPath === relPath);
+                if (!n) return;
+                closePopover();
+                activeView = 'notes';
+                activeCategory = 'all';
+                activeId = relPath;
+                await render();
+              });
+              if (el.getAttribute('draggable') === 'true') {
+                el.addEventListener('dragstart', (ev) => {
+                  ev.stopPropagation();
+                  ev.dataTransfer.effectAllowed = 'move';
+                  ev.dataTransfer.setData(SCHED_DRAG_MIME, el.dataset.id);
+                  try { ev.dataTransfer.setData('text/plain', el.dataset.id); } catch {}
+                });
+              }
+            });
+          });
+        });
 
         $("calPrev").onclick = () => { calendarMonth = new Date(year, month - 1, 1); renderCalendar(); };
         $("calNext").onclick = () => { calendarMonth = new Date(year, month + 1, 1); renderCalendar(); };
@@ -2240,7 +2376,7 @@
           renderCalendar();
         };
         pane.querySelectorAll('[data-field]').forEach(btn => {
-          btn.onclick = () => { calendarField = btn.dataset.field; renderCalendar(); };
+          btn.onclick = () => { if (btn.disabled) return; calendarField = btn.dataset.field; renderCalendar(); };
         });
         pane.querySelectorAll('[data-source]').forEach(btn => {
           btn.onclick = () => { calendarSource = btn.dataset.source; renderCalendar(); };
