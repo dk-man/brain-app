@@ -2210,7 +2210,8 @@
         const today = new Date();
 
         const firstOfMonth = new Date(year, month, 1);
-        const startOffset = firstOfMonth.getDay();
+        // Monday-first: Sun=0 -> 6, Mon=1 -> 0, ...
+        const startOffset = (firstOfMonth.getDay() + 6) % 7;
         const gridStart = new Date(year, month, 1 - startOffset);
 
         // Bucket notes by yyyy-mm-dd. Kind: 'activity' | 'scheduled'.
@@ -2246,8 +2247,19 @@
           }
         }
 
-        const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        const weekdays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
         const weekdayHtml = weekdays.map(w => `<div class="cal-weekday">${w}</div>`).join('');
+
+        const MAX_VISIBLE = 3;
+        const noteItemHtml = ({ n, kind }) => {
+          const cat = catById(n.category);
+          const color = cat?.color || '#8e8e93';
+          const isSched = kind === 'scheduled';
+          const cls = `cal-note${isSched ? ' scheduled' : ''}`;
+          const drag = isSched ? 'draggable="true"' : '';
+          const glyph = isSched ? '<span class="sched-glyph" title="Scheduled">◷</span>' : `<span class="cat-dot" style="background:${escapeAttr(color)}"></span>`;
+          return `<div class="${cls}" data-id="${escapeAttr(n.relPath)}" data-kind="${kind}" ${drag} title="${escapeAttr(n.title || 'Untitled')}${isSched ? ' — scheduled' : ''}">${glyph}<span>${escapeHtml(n.title || 'Untitled')}</span></div>`;
+        };
 
         let cellsHtml = '';
         for (let i = 0; i < 42; i++) {
@@ -2262,22 +2274,20 @@
             if (a.kind !== b.kind) return a.kind === 'scheduled' ? -1 : 1;
             return b.d - a.d;
           });
-          const notesHtml = items.map(({ n, kind }) => {
-            const cat = catById(n.category);
-            const color = cat?.color || '#8e8e93';
-            const isSched = kind === 'scheduled';
-            const cls = `cal-note${isSched ? ' scheduled' : ''}`;
-            const drag = isSched ? 'draggable="true"' : '';
-            const glyph = isSched ? '<span class="sched-glyph" title="Scheduled">◷</span>' : `<span class="cat-dot" style="background:${escapeAttr(color)}"></span>`;
-            return `<div class="${cls}" data-id="${escapeAttr(n.relPath)}" data-kind="${kind}" ${drag} title="${escapeAttr(n.title || 'Untitled')}${isSched ? ' — scheduled' : ''}">${glyph}<span>${escapeHtml(n.title || 'Untitled')}</span></div>`;
-          }).join('');
+          const visible = items.slice(0, MAX_VISIBLE);
+          const hidden = items.length - visible.length;
+          const notesHtml = visible.map(noteItemHtml).join('');
+          const moreHtml = hidden > 0
+            ? `<div class="cal-more" data-more="${iso}">+${hidden} more</div>`
+            : '';
           cellsHtml += `
             <div class="cal-day ${inMonth ? '' : 'other-month'} ${isToday ? 'today' : ''}" data-iso="${iso}">
               <div class="cal-day-num">${d.getDate()}</div>
-              <div class="cal-day-notes">${notesHtml}</div>
+              <div class="cal-day-notes">${notesHtml}${moreHtml}</div>
             </div>`;
         }
 
+        const fieldDisabled = calendarSource === 'scheduled';
         pane.innerHTML = `
           <div class="cal-header">
             <button class="cal-nav-btn" id="calPrev" title="Previous month" aria-label="Previous month">‹</button>
@@ -2289,14 +2299,74 @@
               <button class="${calendarSource === 'activity' ? 'active' : ''}" data-source="activity">Activity</button>
               <button class="${calendarSource === 'scheduled' ? 'active' : ''}" data-source="scheduled">Scheduled</button>
             </div>
-            <div class="cal-field-toggle" role="tablist" aria-label="Activity date field">
-              <button class="${calendarField === 'modified' ? 'active' : ''}" data-field="modified">Modified</button>
-              <button class="${calendarField === 'created' ? 'active' : ''}" data-field="created">Created</button>
+            <div class="cal-field-toggle ${fieldDisabled ? 'disabled' : ''}" role="tablist" aria-label="Activity date field" title="${fieldDisabled ? 'Not applicable in Scheduled view' : ''}">
+              <button class="${calendarField === 'modified' ? 'active' : ''}" data-field="modified" ${fieldDisabled ? 'disabled aria-disabled="true"' : ''}>Modified</button>
+              <button class="${calendarField === 'created' ? 'active' : ''}" data-field="created" ${fieldDisabled ? 'disabled aria-disabled="true"' : ''}>Created</button>
             </div>
           </div>
           <div class="cal-weekdays">${weekdayHtml}</div>
           <div class="cal-grid">${cellsHtml}</div>
         `;
+
+        // Popover for "+N more"
+        function closePopover() {
+          document.querySelectorAll('.cal-popover, .cal-popover-backdrop').forEach(el => el.remove());
+        }
+        pane.querySelectorAll('.cal-more').forEach(m => {
+          m.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closePopover();
+            const iso = m.dataset.more;
+            const cell = m.closest('.cal-day');
+            const key = (() => {
+              const [y, mo, da] = iso.split('-').map(Number);
+              return `${y}-${mo - 1}-${da}`;
+            })();
+            const items = (buckets.get(key) || []).sort((a, b) => {
+              if (a.kind !== b.kind) return a.kind === 'scheduled' ? -1 : 1;
+              return b.d - a.d;
+            });
+            const backdrop = document.createElement('div');
+            backdrop.className = 'cal-popover-backdrop';
+            backdrop.onclick = closePopover;
+            const pop = document.createElement('div');
+            pop.className = 'cal-popover';
+            const [y, mo, da] = iso.split('-').map(Number);
+            const dt = new Date(y, mo - 1, da);
+            pop.innerHTML = `<div class="cal-popover-title">${escapeHtml(dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }))}</div>` + items.map(noteItemHtml).join('');
+            document.body.appendChild(backdrop);
+            document.body.appendChild(pop);
+            const rect = cell.getBoundingClientRect();
+            const popW = 240;
+            let left = rect.left;
+            if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+            let top = rect.bottom + 4;
+            const popH = Math.min(320, 40 + items.length * 22);
+            if (top + popH > window.innerHeight - 8) top = Math.max(8, rect.top - popH - 4);
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+            pop.querySelectorAll('.cal-note').forEach(el => {
+              el.addEventListener('click', async () => {
+                const relPath = el.dataset.id;
+                const n = notes.find(x => x.relPath === relPath);
+                if (!n) return;
+                closePopover();
+                activeView = 'notes';
+                activeCategory = 'all';
+                activeId = relPath;
+                await render();
+              });
+              if (el.getAttribute('draggable') === 'true') {
+                el.addEventListener('dragstart', (ev) => {
+                  ev.stopPropagation();
+                  ev.dataTransfer.effectAllowed = 'move';
+                  ev.dataTransfer.setData(SCHED_DRAG_MIME, el.dataset.id);
+                  try { ev.dataTransfer.setData('text/plain', el.dataset.id); } catch {}
+                });
+              }
+            });
+          });
+        });
 
         $("calPrev").onclick = () => { calendarMonth = new Date(year, month - 1, 1); renderCalendar(); };
         $("calNext").onclick = () => { calendarMonth = new Date(year, month + 1, 1); renderCalendar(); };
