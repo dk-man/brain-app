@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu, MenuItem, clipboard } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu, MenuItem, clipboard, globalShortcut } = require("electron");
 const path = require("path");
 const fs = require("fs/promises");
 const fssync = require("fs");
@@ -6,6 +6,10 @@ const fssync = require("fs");
 const TRASH = "Trash";
 const TRASH_SEP = "__";
 const CATEGORIES_FILE = ".categories.json";
+const INBOX = "Inbox";
+
+// Quick-capture global hotkey. Change here to rebind.
+const QUICK_CAPTURE_HOTKEY = "CommandOrControl+Shift+N";
 
 const DEFAULT_CATEGORIES = [
   { id: "Work", name: "Work", color: "#0071e3" },
@@ -16,6 +20,16 @@ const DEFAULT_CATEGORIES = [
 function rootDir() {
   return path.join(app.getPath("documents"), "Brain");
 }
+
+function safeJoin(relPath) {
+  const root = path.resolve(rootDir());
+  const full = path.resolve(path.join(root, String(relPath || "")));
+  if (full !== root && !full.startsWith(root + path.sep)) {
+    throw new Error("Path traversal detected");
+  }
+  return full;
+}
+
 
 function categoriesFilePath() {
   return path.join(rootDir(), CATEGORIES_FILE);
@@ -29,27 +43,110 @@ function sanitize(name) {
     .slice(0, 120) || "Untitled";
 }
 
-function sanitizeCategoryId(name) {
+function sanitizeSegment(name) {
   return String(name || "")
     .replace(/[\\/:*?"<>|.]/g, "-")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 60);
 }
+// Back-compat alias — legacy single-segment sanitizer
+const sanitizeCategoryId = sanitizeSegment;
+
+const MAX_CAT_DEPTH = 3;
+function sanitizeCategoryPath(pathStr) {
+  return String(pathStr || "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .map(sanitizeSegment)
+    .filter(Boolean)
+    .slice(0, MAX_CAT_DEPTH)
+    .join("/");
+}
+
+// Given a note relPath, return the deepest matching category id.
+function categoryOf(relPath, categoryIds) {
+  const parts = String(relPath || "").split(path.sep);
+  if (!parts.length) return "";
+  if (parts[0] === TRASH) return TRASH;
+  for (let n = Math.min(parts.length - 1, MAX_CAT_DEPTH); n >= 1; n--) {
+    const candidate = parts.slice(0, n).join("/");
+    if (categoryIds.includes(candidate)) return candidate;
+  }
+  return parts[0];
+}
+
+async function listCategoryDirsOnDisk() {
+  const root = rootDir();
+  const out = [];
+  async function walk(rel, depth) {
+    if (depth > MAX_CAT_DEPTH) return;
+    const full = rel ? path.join(root, rel) : root;
+    let entries;
+    try { entries = await fs.readdir(full, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith(".")) continue;
+      if (!rel && e.name === TRASH) continue;
+      const childRel = rel ? `${rel}/${e.name}` : e.name;
+      out.push(childRel);
+      await walk(childRel, depth + 1);
+    }
+  }
+  await walk("", 1);
+  return out;
+}
 
 async function loadCategories() {
   await fs.mkdir(rootDir(), { recursive: true });
+  let stored = null;
   try {
     const raw = await fs.readFile(categoriesFilePath(), "utf8");
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length) {
-      return parsed
+    if (Array.isArray(parsed)) {
+      stored = parsed
         .filter((c) => c && c.id && c.id !== TRASH)
         .map((c) => ({ id: c.id, name: c.name || c.id, color: c.color || "#8e8e93" }));
     }
   } catch {}
-  await saveCategories(DEFAULT_CATEGORIES);
-  return DEFAULT_CATEGORIES.slice();
+  if (!stored) {
+    await saveCategories(DEFAULT_CATEGORIES);
+    return DEFAULT_CATEGORIES.slice();
+  }
+  // Reconcile stored order with what's on disk: drop missing folders,
+  // append externally-created folders alphabetically at the end.
+  const diskDirs = await listCategoryDirsOnDisk();
+  const diskSet = new Set(diskDirs);
+  const kept = stored.filter((c) => diskSet.has(c.id));
+  const knownIds = new Set(kept.map((c) => c.id));
+  const extras = diskDirs
+    .filter((d) => !knownIds.has(d))
+    .sort((a, b) => a.localeCompare(b))
+    .map((d) => ({ id: d, name: d.split("/").pop(), color: "#8e8e93" }));
+  const final = [...kept, ...extras];
+  const changed =
+    final.length !== stored.length ||
+    final.some((c, i) => !stored[i] || stored[i].id !== c.id);
+  if (changed && final.length) await saveCategories(final);
+  return final.length ? final : stored;
+}
+
+async function reorderCategories(orderedIds) {
+  const cats = await loadCategories();
+  const byId = new Map(cats.map((c) => [c.id, c]));
+  const seen = new Set();
+  const ordered = [];
+  for (const id of Array.isArray(orderedIds) ? orderedIds : []) {
+    if (byId.has(id) && !seen.has(id)) {
+      ordered.push(byId.get(id));
+      seen.add(id);
+    }
+  }
+  for (const c of cats) {
+    if (!seen.has(c.id)) ordered.push(c);
+  }
+  await saveCategories(ordered);
+  return ordered;
 }
 
 async function saveCategories(cats) {
@@ -68,17 +165,26 @@ async function ensureDirs() {
   return cats;
 }
 
-async function addCategory({ name, color }) {
+async function addCategory({ name, color, parent }) {
   const cats = await loadCategories();
-  const baseId = sanitizeCategoryId(name);
-  if (!baseId) throw new Error("Invalid category name");
-  if (baseId === TRASH) throw new Error("Reserved name");
+  const seg = sanitizeSegment(name);
+  if (!seg) throw new Error("Invalid category name");
+  if (seg === TRASH) throw new Error("Reserved name");
+  let parentPath = "";
+  if (parent) {
+    parentPath = sanitizeCategoryPath(parent);
+    if (!cats.find((c) => c.id === parentPath)) throw new Error("Parent category not found");
+  }
+  const depth = parentPath ? parentPath.split("/").length : 0;
+  if (depth >= MAX_CAT_DEPTH) throw new Error(`Max nesting depth is ${MAX_CAT_DEPTH}`);
+  const baseId = parentPath ? `${parentPath}/${seg}` : seg;
   let id = baseId;
   let i = 2;
   while (cats.find((c) => c.id.toLowerCase() === id.toLowerCase())) {
     id = `${baseId} ${i++}`;
   }
-  const cat = { id, name: id, color: color || "#8e8e93" };
+  const leaf = id.split("/").pop();
+  const cat = { id, name: leaf, color: color || "#8e8e93" };
   cats.push(cat);
   await saveCategories(cats);
   await fs.mkdir(path.join(rootDir(), id), { recursive: true });
@@ -161,6 +267,13 @@ function yamlEsc(s) {
   return str;
 }
 
+const SCHED_RE = /^\d{4}-\d{2}-\d{2}$/;
+function normScheduled(v) {
+  if (v == null || v === "") return null;
+  const s = String(v).trim();
+  return SCHED_RE.test(s) ? s : null;
+}
+
 function serializeFrontmatter(fm) {
   const tags = Array.isArray(fm.tags) ? fm.tags : [];
   const lines = [
@@ -169,6 +282,17 @@ function serializeFrontmatter(fm) {
     `created: ${fm.created}`,
     `modified: ${fm.modified}`,
   ];
+  const sched = normScheduled(fm.scheduled);
+  if (sched) lines.push(`scheduled: ${sched}`);
+  // preserve any other unknown keys so external edits aren't lost
+  const known = new Set(["title", "tags", "created", "modified", "scheduled"]);
+  for (const k of Object.keys(fm)) {
+    if (known.has(k)) continue;
+    const v = fm[k];
+    if (v == null) continue;
+    if (Array.isArray(v)) continue;
+    lines.push(`${k}: ${yamlEsc(v)}`);
+  }
   return `---\n${lines.join("\n")}\n---\n\n`;
 }
 
@@ -195,12 +319,12 @@ async function renameTracked(oldFull, newFull) {
 }
 
 async function readNoteRaw(relPath) {
-  const full = path.join(rootDir(), relPath);
+  const full = safeJoin(relPath);
   return await fs.readFile(full, "utf8");
 }
 
 async function ensureFrontmatter(relPath) {
-  const full = path.join(rootDir(), relPath);
+  const full = safeJoin(relPath);
   const raw = await fs.readFile(full, "utf8");
   const parsed = parseFrontmatter(raw);
   if (parsed.fm && parsed.fm.created && parsed.fm.modified) {
@@ -214,7 +338,8 @@ async function ensureFrontmatter(relPath) {
   let title;
   if (isTrash) {
     const cats = await loadCategories();
-    title = parseTrashName(path.basename(relPath), cats.map((c) => c.id)).title;
+    const topIds = Array.from(new Set(cats.map((c) => c.id.split("/")[0])));
+    title = parseTrashName(path.basename(relPath), topIds).title;
   } else {
     title = path.basename(relPath, ".md");
   }
@@ -226,6 +351,9 @@ async function ensureFrontmatter(relPath) {
     created: parsed.fm?.created || created,
     modified: parsed.fm?.modified || modified,
   };
+  const passSched = normScheduled(parsed.fm?.scheduled);
+  if (passSched) merged.scheduled = passSched;
+  if (parsed.fm?.originalCategory) merged.originalCategory = String(parsed.fm.originalCategory);
   const body = parsed.fm ? parsed.body : raw;
   const newRaw = serializeFrontmatter(merged) + body;
   await writeFileTracked(full, newRaw);
@@ -234,8 +362,8 @@ async function ensureFrontmatter(relPath) {
   return { frontmatter: merged, body, injected: true };
 }
 
-async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
-  const full = path.join(rootDir(), relPath);
+async function writeNote(relPath, { body, title, tags, scheduled, originalCategory, bumpModified = true }) {
+  const full = safeJoin(relPath);
   let existing = { fm: null, body: "" };
   try {
     const raw = await fs.readFile(full, "utf8");
@@ -248,6 +376,18 @@ async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
     created: existing.fm?.created || now,
     modified: bumpModified ? now : (existing.fm?.modified || now),
   };
+  // scheduled: undefined = keep existing; null/"" = clear; string = set
+  let nextSched;
+  if (scheduled === undefined) nextSched = normScheduled(existing.fm?.scheduled);
+  else if (scheduled === null || scheduled === "") nextSched = null;
+  else nextSched = normScheduled(scheduled);
+  if (nextSched) merged.scheduled = nextSched;
+  // originalCategory: undefined = keep existing; null/"" = clear; string = set
+  let nextOrig;
+  if (originalCategory === undefined) nextOrig = existing.fm?.originalCategory ? String(existing.fm.originalCategory) : null;
+  else if (originalCategory === null || originalCategory === "") nextOrig = null;
+  else nextOrig = String(originalCategory);
+  if (nextOrig) merged.originalCategory = nextOrig;
   const newBody = body !== undefined ? body : existing.body;
   const raw = serializeFrontmatter(merged) + newBody;
   await writeFileTracked(full, raw);
@@ -257,26 +397,40 @@ async function writeNote(relPath, { body, title, tags, bumpModified = true }) {
 async function listAll() {
   const cats = await ensureDirs();
   const ids = cats.map((c) => c.id);
-  const allFolders = [...ids, TRASH];
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
   const root = rootDir();
   const entries = [];
-  const dirs = await fs.readdir(root, { withFileTypes: true });
-  for (const c of dirs) {
-    if (!c.isDirectory()) continue;
-    if (!allFolders.includes(c.name)) continue;
-    const catDir = path.join(root, c.name);
-    const files = await fs.readdir(catDir, { withFileTypes: true });
+  const folders = [...ids.map((id) => ({ folder: id, isTrash: false })), { folder: TRASH, isTrash: true }];
+  for (const spec of folders) {
+    const catDir = path.join(root, spec.folder);
+    let files;
+    try { files = await fs.readdir(catDir, { withFileTypes: true }); } catch { continue; }
     for (const f of files) {
       if (!f.isFile() || !f.name.endsWith(".md")) continue;
       const full = path.join(catDir, f.name);
       const stat = await fs.stat(full);
-      const isTrash = c.name === TRASH;
-      const parsed = isTrash ? parseTrashName(f.name, ids) : null;
+      let title, origCat = null;
+      if (spec.isTrash) {
+        // Prefer frontmatter, fall back to filename convention
+        try {
+          const raw = await fs.readFile(full, "utf8");
+          const p = parseFrontmatter(raw);
+          if (p.fm?.originalCategory) origCat = String(p.fm.originalCategory);
+          if (p.fm?.title) title = String(p.fm.title);
+        } catch {}
+        if (!title || !origCat) {
+          const parsed = parseTrashName(f.name, topIds);
+          if (!title) title = parsed.title;
+          if (!origCat) origCat = parsed.originalCategory;
+        }
+      } else {
+        title = f.name.replace(/\.md$/, "");
+      }
       entries.push({
-        relPath: path.join(c.name, f.name),
-        category: c.name,
-        title: isTrash ? parsed.title : f.name.replace(/\.md$/, ""),
-        originalCategory: isTrash ? parsed.originalCategory : null,
+        relPath: path.join(spec.folder, f.name),
+        category: spec.folder,
+        title,
+        originalCategory: spec.isTrash ? origCat : null,
         updatedAt: stat.mtimeMs,
       });
     }
@@ -286,7 +440,7 @@ async function listAll() {
 
 const SEED = [
   { category: "Work", title: "Start Here — Welcome to Brain",
-    body: "Brain is a tiny, local-first notes app. Everything you write lives as a plain `.md` file in your Documents/Brain folder — no account, no cloud, no lock-in.\n\nThis welcome note links to short guides that both explain and demonstrate each feature. Click any link below to open it.\n\n## The basics\n- [[Checkboxes — how they work]]\n- [[Tags & frontmatter]]\n- [[Wikilinks & backlinks]]\n- [[Import, export & local storage]]\n- [[Editing outside the app (Obsidian, VS Code)]]\n\n## Try it right now\n1. Click the checkbox below — it saves instantly to disk.\n2. Click the tag chip at the top of this note to add another.\n3. Click [[Checkboxes — how they work]] to jump to another note.\n\n- [ ] I clicked a checkbox\n- [ ] I added a tag\n- [ ] I followed a wikilink\n\nWhen you're done exploring, you can delete these notes — or keep them as a cheat sheet. See also: [[Keyboard & navigation tips]]." },
+    body: "Brain is a tiny, local-first notes app. Everything you write lives as a plain `.md` file in your Documents/Brain folder — no account, no cloud, no lock-in.\n\nThis welcome note links to short guides that both explain and demonstrate each feature. Click any link below to open it.\n\n## The basics\n- [[Checkboxes — how they work]]\n- [[Tags & frontmatter]]\n- [[Wikilinks & backlinks]]\n- [[Import, export & local storage]]\n- [[Editing outside the app (Obsidian, VS Code)]]\n\n## Power features\n- [[Quick capture from anywhere (⌘⇧N)]] — jot a thought without leaving what you're doing.\n- [[Search across all notes (⌘K)]] — command-palette search over every note in the vault.\n\n## Try it right now\n1. Click the checkbox below — it saves instantly to disk.\n2. Click the tag chip at the top of this note to add another.\n3. Press `⌘K` and type a word from any other note.\n4. Click [[Checkboxes — how they work]] to jump to another note.\n\n- [ ] I clicked a checkbox\n- [ ] I added a tag\n- [ ] I opened ⌘K search\n- [ ] I followed a wikilink\n\nWhen you're done exploring, you can delete these notes — or keep them as a cheat sheet. See also: [[Keyboard & navigation tips]]." },
 
   { category: "Work", title: "Checkboxes — how they work",
     body: "Any line that starts with `- [ ]` or `- [x]` is rendered as a real, clickable checkbox. Click it and Brain rewrites that exact line in the `.md` file — nothing else is reformatted or reordered.\n\n## Try it\n- [ ] Click me\n- [x] I'm already done\n- [ ] Edit this note in any text editor, change `[ ]` to `[x]`, save — Brain picks it up live.\n\n## Why this matters\nThe file stays valid GitHub-Flavored Markdown, so the same list works in Obsidian, GitHub, VS Code preview, etc.\n\nRelated: [[Tags & frontmatter]], [[Editing outside the app (Obsidian, VS Code)]]." },
@@ -304,7 +458,13 @@ const SEED = [
     body: "Because notes are plain Markdown with YAML frontmatter, you can point **Obsidian**, **VS Code**, **iA Writer**, or any text editor at `~/Documents/Brain` and edit there too.\n\nBrain watches the folder. When you save a file elsewhere:\n- New notes appear in the sidebar.\n- Edits to the body, checkboxes, or tags show up live in Brain.\n- Renames and deletes are reflected too.\n\n## Tip\nPoint Obsidian's vault at `~/Documents/Brain` and you get graph view, mobile sync (via your own iCloud/Dropbox), and Brain's clean UI on the desktop — all on the same files.\n\nRelated: [[Tags & frontmatter]], [[Checkboxes — how they work]]." },
 
   { category: "Work", title: "Keyboard & navigation tips",
-    body: "- **Click a wikilink** → jump to that note.\n- **Type `[[`** → autocomplete of existing titles. `↑/↓` to choose, `Enter` or `Tab` to insert, `Esc` to dismiss.\n- **Click a tag chip** → remove it; **`+ tag`** → add one.\n- **Click a checkbox** → toggle and save.\n- **Drag a note** to another category in the sidebar to move it.\n- **Delete** moves to Trash (recoverable); deleting from Trash is permanent.\n\nRelated: [[Start Here — Welcome to Brain]]." },
+    body: "## Global\n- **`⌘K`** → open search from anywhere. Type to filter, `↑/↓` to move, `↵` to open, `Esc` to close. See [[Search across all notes (⌘K)]].\n- **`⌘⇧N`** → open Quick Capture, even when Brain isn't focused. See [[Quick capture from anywhere (⌘⇧N)]].\n- **`⌘⇧R`** → toggle Edit / Read mode on the current note.\n\n## Inside a note\n- **Click a wikilink** → jump to that note.\n- **Type `[[`** → autocomplete of existing titles. `↑/↓` to choose, `↵` or `Tab` to insert, `Esc` to dismiss.\n- **Click a tag chip** → remove it; **`+ tag`** → add one.\n- **Click a checkbox** → toggle and save.\n\n## Sidebar & list\n- **Drag a note** to another category in the sidebar to move it.\n- **Delete** moves to Trash (recoverable); deleting from Trash is permanent.\n\nRelated: [[Start Here — Welcome to Brain]]." },
+
+  { category: "Work", title: "Search across all notes (⌘K)",
+    body: "Press **`⌘K`** anywhere in Brain to open a command-palette-style search. It works across **every category** in your vault — not just the one you're viewing — and is instant even with hundreds of notes.\n\n## How it works\n- Matches against both the note **title** and the full **body text**.\n- Case-insensitive substring matching, so partial words work.\n- Results show the note title, its category, and a short snippet with the match highlighted.\n- Notes in Trash are excluded.\n\n## Keyboard\n- `↑` / `↓` — move selection\n- `↵` — open the highlighted note (and close the palette)\n- `Esc` — close without navigating\n- Clicking a row works too\n\n## Find open todos across the vault\nTick **\"Has unchecked items\"** at the top of the palette to only show notes that contain at least one `- [ ]` line. Perfect for jumping into a shopping list, a reading list, or that half-finished project you forgot about.\n\n## Try it\n1. Press `⌘K`.\n2. Type `sourdough` — you should see [[Sourdough Schedule]].\n3. Clear the query, tick **Has unchecked items**, and browse every open list at once.\n\nThe index is built in memory when Brain launches and stays in sync with disk changes — search stays fast as your vault grows.\n\nRelated: [[Quick capture from anywhere (⌘⇧N)]], [[Keyboard & navigation tips]]." },
+
+  { category: "Work", title: "Quick capture from anywhere (⌘⇧N)",
+    body: "Press **`⌘⇧N`** from *any* app on your Mac — you don't need Brain to be focused, or even visible — and a small capture window pops up over whatever you're doing.\n\n## How it works\n- Type (or paste) your thought into the auto-focused field.\n- **`⌘↵`** or the **Save** button writes a new `.md` file to the **Inbox** category.\n- **`Esc`** cancels without saving.\n- The window hides on blur — it never steals focus back to Brain.\n\nThe first line of what you type becomes the note title; the rest becomes the body. The new note appears in Brain's main window automatically thanks to the two-way disk sync — no manual refresh needed.\n\n## Why an \"Inbox\"\nQuick capture is for **getting things out of your head**, not organizing. Everything lands in `Inbox`, and later you can drag it into the right category, add tags, or flesh it out. Think of it as your daily triage queue.\n\n## Try it\n1. Press `⌘⇧N` from anywhere.\n2. Type: `remember to try Brain's search — ⌘K`.\n3. Press `⌘↵`.\n4. Open the **Inbox** category in the sidebar — your note is there.\n\nRelated: [[Search across all notes (⌘K)]], [[Keyboard & navigation tips]]." },
 
   { category: "Hobbies", title: "Reading List",
     body: "A normal note, to show how you'd actually use Brain day-to-day.\n\n## Want to read\n- [ ] The Pragmatic Programmer\n- [ ] Steal Like an Artist\n- [ ] The Creative Act — Rick Rubin\n- [ ] A Pattern Language\n\n## Done\n- [x] Designing Data-Intensive Applications\n\nTip: link a book to its own note with `[[Book title]]` for notes & quotes. See [[Wikilinks & backlinks]]." },
@@ -336,12 +496,18 @@ async function trashNote(relPath) {
   const cats = await loadCategories();
   const ids = cats.map((c) => c.id);
   const root = rootDir();
-  const oldFull = path.join(root, relPath);
-  const parts = relPath.split(path.sep);
-  const cat = parts[0];
+  const oldFull = safeJoin(relPath);
+  const cat = categoryOf(relPath, ids);
   if (cat === TRASH) return { relPath };
-  const filename = parts.slice(1).join(path.sep).replace(/\.md$/, "");
-  const newBase = `${ids.includes(cat) ? cat : (ids[0] || "Work")}${TRASH_SEP}${filename}`;
+  const filename = path.basename(relPath, ".md");
+  // Persist full nested category path in frontmatter so restore is exact
+  try {
+    await writeNote(relPath, { originalCategory: cat, bumpModified: false });
+  } catch {}
+  const topCat = cat.split("/")[0];
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
+  const legacyPrefix = topIds.includes(topCat) ? topCat : (topIds[0] || "Work");
+  const newBase = `${legacyPrefix}${TRASH_SEP}${filename}`;
   const trashDir = path.join(root, TRASH);
   await fs.mkdir(trashDir, { recursive: true });
   const target = await uniquePath(trashDir, newBase, ".md");
@@ -353,16 +519,31 @@ async function restoreNote(relPath) {
   const cats = await loadCategories();
   const ids = cats.map((c) => c.id);
   const root = rootDir();
-  const oldFull = path.join(root, relPath);
+  const oldFull = safeJoin(relPath);
   const parts = relPath.split(path.sep);
   if (parts[0] !== TRASH) return { relPath };
-  const parsed = parseTrashName(parts[parts.length - 1], ids);
-  const cat = ids.includes(parsed.originalCategory) ? parsed.originalCategory : (ids[0] || "Work");
+  // Prefer frontmatter for exact nested restore
+  let title = null, origCat = null;
+  try {
+    const raw = await fs.readFile(oldFull, "utf8");
+    const p = parseFrontmatter(raw);
+    if (p.fm?.originalCategory) origCat = String(p.fm.originalCategory);
+    if (p.fm?.title) title = String(p.fm.title);
+  } catch {}
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
+  const parsed = parseTrashName(parts[parts.length - 1], topIds);
+  if (!title) title = parsed.title;
+  if (!origCat) origCat = parsed.originalCategory;
+  let cat = ids.includes(origCat) ? origCat : null;
+  if (!cat) cat = ids.find((x) => x === (origCat || "").split("/")[0]) || ids[0] || "Work";
   const dir = path.join(root, cat);
   await fs.mkdir(dir, { recursive: true });
-  const target = await uniquePath(dir, sanitize(parsed.title), ".md");
+  const target = await uniquePath(dir, sanitize(title), ".md");
   await renameTracked(oldFull, target);
-  return { relPath: path.relative(root, target) };
+  // Clear originalCategory from frontmatter now that it's restored
+  const newRel = path.relative(root, target);
+  try { await writeNote(newRel, { originalCategory: null, bumpModified: false }); } catch {}
+  return { relPath: newRel };
 }
 
 async function exportAll() {
@@ -404,28 +585,36 @@ async function importAll() {
   let cats = await loadCategories();
   if (Array.isArray(data.categories)) {
     for (const c of data.categories) {
-      if (!c?.id || c.id === TRASH) continue;
-      if (!cats.find((x) => x.id.toLowerCase() === c.id.toLowerCase())) {
-        cats.push({ id: c.id, name: c.name || c.id, color: c.color || "#8e8e93" });
+      if (!c?.id) continue;
+      const safeId = sanitizeCategoryPath(c.id);
+      if (!safeId || safeId === TRASH) continue;
+      if (!cats.find((x) => x.id.toLowerCase() === safeId.toLowerCase())) {
+        const leaf = safeId.split("/").pop();
+        cats.push({ id: safeId, name: c.name || leaf, color: c.color || "#8e8e93" });
       }
     }
     await saveCategories(cats);
   }
   await ensureDirs();
   const ids = cats.map((c) => c.id);
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
   let imported = 0;
   for (const n of data.notes) {
-    const cat = n.category === TRASH ? TRASH : (ids.includes(n.category) ? n.category : (ids[0] || "Work"));
-    const dir = path.join(rootDir(), cat);
+    const rawCat = n.category === TRASH ? TRASH : sanitizeCategoryPath(n.category || "");
+    const cat = rawCat === TRASH ? TRASH : (ids.includes(rawCat) ? rawCat : (ids[0] || "Work"));
+    const dir = safeJoin(cat);
     await fs.mkdir(dir, { recursive: true });
     const baseTitle = sanitize(n.title || "Untitled");
+    const safeOrig = sanitizeCategoryPath(n.originalCategory || "");
+    const legacyPrefix = safeOrig ? safeOrig.split("/")[0] : "";
     const base = cat === TRASH
-      ? `${ids.includes(n.originalCategory) ? n.originalCategory : (ids[0] || "Work")}${TRASH_SEP}${baseTitle}`
+      ? `${legacyPrefix && topIds.includes(legacyPrefix) ? legacyPrefix : (topIds[0] || "Work")}${TRASH_SEP}${baseTitle}`
       : baseTitle;
     const target = await uniquePath(dir, base, ".md");
     await writeFileTracked(target, n.body || "");
     imported++;
   }
+
   return { ok: true, count: imported };
 }
 
@@ -455,6 +644,81 @@ function startWatcher() {
   } catch (e) {
     console.warn("watch failed", e);
   }
+}
+
+async function ensureInboxCategory() {
+  const cats = await loadCategories();
+  if (!cats.find((c) => c.id.toLowerCase() === INBOX.toLowerCase())) {
+    cats.push({ id: INBOX, name: INBOX, color: "#af52de" });
+    await saveCategories(cats);
+  }
+  await fs.mkdir(path.join(rootDir(), INBOX), { recursive: true });
+}
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function timestampSlug(d = new Date()) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+async function quickCapture(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return { ok: false };
+  await ensureInboxCategory();
+  const firstLine = trimmed.split(/\r?\n/)[0].trim();
+  const derived = sanitize(firstLine.replace(/^#+\s*/, "").slice(0, 60) || "quick note");
+  const base = `${timestampSlug()}-${derived}`;
+  const dir = safeJoin(INBOX);
+  const target = await uniquePath(dir, base, ".md");
+  const now = new Date().toISOString();
+  const title = path.basename(target, ".md");
+  const fm = serializeFrontmatter({ title, tags: [], created: now, modified: now });
+  await writeFileTracked(target, fm + trimmed + "\n");
+  return { ok: true, relPath: path.relative(rootDir(), target) };
+}
+
+// ----- Quick-capture window -----
+let captureWin = null;
+function createCaptureWindow() {
+  if (captureWin && !captureWin.isDestroyed()) return captureWin;
+  captureWin = new BrowserWindow({
+    width: 600,
+    height: 200,
+    center: true,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    vibrancy: "under-window",
+    visualEffectState: "active",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "quick-capture-preload.cjs"),
+    },
+  });
+  captureWin.setAlwaysOnTop(true, "floating");
+  captureWin.loadFile(path.join(__dirname, "quick-capture.html"));
+  captureWin.on("blur", () => {
+    if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+  });
+  captureWin.on("closed", () => { captureWin = null; });
+  return captureWin;
+}
+
+function showCaptureWindow() {
+  const win = createCaptureWindow();
+  if (win.isVisible()) { win.focus(); return; }
+  win.center();
+  const notify = () => win.webContents.send("brain:quickCaptureShown");
+  win.show();
+  win.focus();
+  if (win.webContents.isLoading()) win.webContents.once("did-finish-load", notify);
+  else notify();
 }
 
 function createWindow() {
@@ -513,16 +777,20 @@ function createWindow() {
     }
 
     if (params.linkURL) {
+      const isSafeHttp = /^https?:\/\//i.test(params.linkURL);
       if (menu.items.length) menu.append(new MenuItem({ type: "separator" }));
       menu.append(new MenuItem({
         label: "Copy Link",
         click: () => clipboard.writeText(params.linkURL),
       }));
-      menu.append(new MenuItem({
-        label: "Open Link in Browser",
-        click: () => shell.openExternal(params.linkURL),
-      }));
+      if (isSafeHttp) {
+        menu.append(new MenuItem({
+          label: "Open Link in Browser",
+          click: () => shell.openExternal(params.linkURL),
+        }));
+      }
     }
+
 
     if (menu.items.length) menu.popup({ window: win });
   });
@@ -534,17 +802,18 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:list", () => listAll());
   ipcMain.handle("brain:categories", () => loadCategories());
   ipcMain.handle("brain:addCategory", (_e, payload) => addCategory(payload || {}));
+  ipcMain.handle("brain:reorderCategories", (_e, orderedIds) => reorderCategories(orderedIds));
   ipcMain.handle("brain:read", async (_e, relPath) => {
     // Legacy raw read (no frontmatter stripping). Kept for backward compat.
     return await readNoteRaw(relPath);
   });
   ipcMain.handle("brain:readNote", async (_e, relPath) => ensureFrontmatter(relPath));
-  ipcMain.handle("brain:writeNote", async (_e, { relPath, body, title, tags, bumpModified }) =>
-    writeNote(relPath, { body, title, tags, bumpModified }),
+  ipcMain.handle("brain:writeNote", async (_e, { relPath, body, title, tags, scheduled, bumpModified }) =>
+    writeNote(relPath, { body, title, tags, scheduled, bumpModified }),
   );
   ipcMain.handle("brain:write", async (_e, { relPath, body }) => {
     // Legacy: write raw body without touching frontmatter.
-    const full = path.join(rootDir(), relPath);
+    const full = safeJoin(relPath);
     await writeFileTracked(full, body);
     return true;
   });
@@ -562,12 +831,13 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:rename", async (_e, { relPath, newTitle, newCategory }) => {
     const cats = await loadCategories();
     const ids = cats.map((c) => c.id);
-    const oldFull = path.join(rootDir(), relPath);
-    const currentCat = relPath.split(path.sep)[0];
+    const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
+    const oldFull = safeJoin(relPath);
+    const currentCat = categoryOf(relPath, ids);
     let finalPath;
     if (currentCat === TRASH) {
       const dir = path.join(rootDir(), TRASH);
-      const parsed = parseTrashName(path.basename(relPath), ids);
+      const parsed = parseTrashName(path.basename(relPath), topIds);
       const base = `${parsed.originalCategory}${TRASH_SEP}${sanitize(newTitle || "Untitled")}`;
       let target = path.join(dir, base + ".md");
       if (target !== oldFull && fssync.existsSync(target)) target = await uniquePath(dir, base, ".md");
@@ -593,15 +863,16 @@ app.whenReady().then(async () => {
       const newTitleOnDisk = path.basename(finalPath, ".md");
       await writeNote(rel, { title: newTitleOnDisk });
     } catch (e) { /* ignore */ }
-    const finalCat = path.relative(rootDir(), finalPath).split(path.sep)[0];
-    return { relPath: path.relative(rootDir(), finalPath), category: finalCat, title: path.basename(finalPath, ".md") };
+    const finalRel = path.relative(rootDir(), finalPath);
+    const finalCat = categoryOf(finalRel, ids);
+    return { relPath: finalRel, category: finalCat, title: path.basename(finalPath, ".md") };
   });
   ipcMain.handle("brain:trash", async (_e, relPath) => trashNote(relPath));
   ipcMain.handle("brain:restore", async (_e, relPath) => restoreNote(relPath));
   ipcMain.handle("brain:seed", () => seedIfEmpty());
   ipcMain.handle("brain:root", () => rootDir());
   ipcMain.handle("brain:reveal", async (_e, relPath) => {
-    const target = relPath ? path.join(rootDir(), relPath) : rootDir();
+    const target = relPath ? safeJoin(relPath) : rootDir();
     shell.showItemInFolder(target);
     return true;
   });
@@ -619,11 +890,35 @@ app.whenReady().then(async () => {
     isDark: nativeTheme.shouldUseDarkColors,
   }));
 
+  ipcMain.handle("brain:quickCapture", async (_e, text) => {
+    const res = await quickCapture(text);
+    if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+    if (res.ok) {
+      BrowserWindow.getAllWindows().forEach((w) => {
+        if (w !== captureWin) w.webContents.send("brain:changed", { paths: [res.relPath] });
+      });
+    }
+    return res;
+  });
+  ipcMain.on("brain:quickCaptureCancel", () => {
+    if (captureWin && !captureWin.isDestroyed()) captureWin.hide();
+  });
+
+  await ensureInboxCategory();
   createWindow();
   startWatcher();
+  createCaptureWindow();
+
+  const registered = globalShortcut.register(QUICK_CAPTURE_HOTKEY, showCaptureWindow);
+  if (!registered) console.warn("Failed to register quick-capture hotkey", QUICK_CAPTURE_HOTKEY);
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {

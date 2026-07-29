@@ -212,6 +212,74 @@
       .nav-item .dot {
         width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
       }
+      .nav-item .drag-handle {
+        color: var(--text-muted);
+        opacity: 0.3;
+        transition: opacity 0.15s;
+        font-size: 12px;
+        line-height: 1;
+        user-select: none;
+        margin-left: -6px;
+        margin-right: -2px;
+        padding: 0 2px;
+      }
+      .nav-item:hover .drag-handle,
+      .nav-item.dragging .drag-handle { opacity: 1; }
+      .nav-item:hover .drag-handle { cursor: grab; }
+      .nav-item.dragging .drag-handle { cursor: grabbing; }
+      .nav-item.dragging { opacity: 0.4; }
+      .nav-item.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+      .nav-item.drop-after  { box-shadow: inset 0 -2px 0 var(--accent); }
+      .nav-item.drop-into   { background: var(--selected); box-shadow: inset 0 0 0 1.5px var(--accent); }
+      html[data-sidebar="collapsed"] .nav-item .drag-handle { display: none; }
+      .nav-item .chevron {
+        width: 12px; text-align: center; font-size: 9px; line-height: 1;
+        color: var(--text-muted); cursor: pointer; user-select: none;
+        transition: transform 0.15s;
+        display: inline-block;
+      }
+      .nav-item .chevron.spacer { visibility: hidden; }
+      .nav-item .add-sub {
+        margin-left: auto;
+        opacity: 0;
+        transition: opacity 0.15s;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 14px; line-height: 1;
+        padding: 0 6px;
+        border-radius: 4px;
+      }
+      .nav-item:hover .add-sub { opacity: 0.7; }
+      .nav-item .add-sub:hover { opacity: 1; background: var(--hover); color: var(--text); }
+      .nav-item:hover .count { display: none; }
+      .file-item.dragging { opacity: 0.4; }
+      .ctx-item.has-sub { position: relative; padding-right: 20px; }
+      .ctx-item.has-sub::after {
+        content: "▸"; position: absolute; right: 8px; top: 50%;
+        transform: translateY(-50%); font-size: 10px; color: var(--text-muted);
+      }
+      .ctx-sub {
+        position: fixed; z-index: 1001;
+        min-width: 180px; max-height: 320px; overflow-y: auto;
+        background: var(--menu-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: var(--menu-shadow);
+        padding: 4px;
+        font-size: 13px;
+      }
+      .ctx-sub .ctx-item.indent-1 { padding-left: 24px; }
+      .ctx-sub .ctx-item.indent-2 { padding-left: 40px; }
+      .ctx-sub .ctx-item.disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+      .subtree-toggle {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 11px; color: var(--text-muted);
+        cursor: pointer; user-select: none;
+        padding: 2px 8px; border-radius: 5px;
+        margin-right: 6px;
+      }
+      .subtree-toggle:hover { background: var(--hover); color: var(--text); }
+      .subtree-toggle input { margin: 0; }
       .panel-btn {
         display: flex;
         align-items: center;
@@ -462,6 +530,84 @@
         font-size: 11px;
         color: var(--text-muted);
       }
+      .sched-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        min-height: 26px;
+        font-size: 11px;
+        line-height: 1;
+        background: color-mix(in oklab, var(--accent, #0071e3) 12%, var(--bg-elev));
+        color: var(--text);
+        border-radius: 999px;
+        border: 1px solid color-mix(in oklab, var(--accent, #0071e3) 40%, var(--border));
+        user-select: none;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .sched-chip:hover { background: color-mix(in oklab, var(--accent, #0071e3) 18%, var(--bg-elev)); }
+      .sched-chip .glyph { font-size: 10px; opacity: 0.8; }
+      .sched-chip .x {
+        cursor: pointer;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1;
+        padding: 0 2px;
+        border-radius: 50%;
+      }
+      .sched-chip .x:hover { color: var(--text); background: var(--hover); }
+      .sched-btn {
+        background: var(--bg-elev);
+        border: 1px dashed var(--border);
+        color: var(--text-muted);
+        font-size: 11px;
+        padding: 4px 10px;
+        min-height: 26px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .sched-btn:hover { color: var(--text); border-color: var(--text-muted); }
+      .schedule-popover {
+        position: absolute;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--bg-elev);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+      }
+      .schedule-popover input[type="date"] {
+        color: var(--text);
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 5px 8px;
+        font: inherit;
+        font-size: 12px;
+        outline: none;
+      }
+      .schedule-popover input[type="date"]:focus { border-color: var(--accent); }
+      .schedule-popover button {
+        color: var(--text-muted);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 5px 8px;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .schedule-popover button:hover { color: var(--text); background: var(--hover); }
+      .schedule-popover .clear { color: var(--danger); }
+      }
       .wikilink {
         color: var(--accent);
         cursor: pointer;
@@ -617,6 +763,253 @@
       ::-webkit-scrollbar { width: 8px; height: 8px; }
       ::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
       .pane:hover ::-webkit-scrollbar-thumb { background: var(--border); }
+      .palette-overlay {
+        position: fixed; inset: 0;
+        background: var(--overlay);
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        z-index: 2500;
+        padding-top: 12vh;
+      }
+      .palette-overlay.open { display: flex; }
+      .palette {
+        width: 640px; max-width: 90vw;
+        background: var(--menu-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--menu-shadow);
+        overflow: hidden;
+        display: flex; flex-direction: column;
+        max-height: 70vh;
+      }
+      .palette-input {
+        border: none; outline: none; background: transparent;
+        color: var(--text);
+        font-family: inherit; font-size: 15px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .palette-filters {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 12px; color: var(--text-muted);
+      }
+      .palette-filters label {
+        display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+      }
+      .palette-list { overflow-y: auto; padding: 6px; }
+      .palette-item {
+        padding: 8px 10px; border-radius: 6px; cursor: pointer;
+      }
+      .palette-item.active { background: var(--selected); }
+      .palette-item .p-title { font-size: 13px; color: var(--text); font-weight: 500; }
+      .palette-item .p-cat { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
+      .palette-item .p-snippet {
+        font-size: 12px; color: var(--text-muted); margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .palette-item mark {
+        background: rgba(255, 204, 0, 0.35);
+        color: inherit; padding: 0 2px; border-radius: 2px;
+      }
+      .palette-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+      .palette-hint { margin-left: auto; }
+
+      /* Calendar view */
+      html[data-view="calendar"] #app { grid-template-columns: 220px 1fr; }
+      html[data-view="calendar"][data-sidebar="collapsed"] #app { grid-template-columns: 0 1fr; }
+      html[data-view="calendar"] .list-pane,
+      html[data-view="calendar"] .editor-pane { display: none; }
+      html:not([data-view="calendar"]) .calendar-pane { display: none; }
+      .calendar-pane {
+        background: var(--bg);
+        padding: 56px 24px 24px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .cal-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .cal-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+        min-width: 180px;
+      }
+      .cal-nav-btn {
+        width: 28px; height: 28px;
+        border: 1px solid var(--border);
+        background: var(--bg-elev);
+        border-radius: 6px;
+        color: var(--text);
+        cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 14px;
+      }
+      .cal-nav-btn:hover { background: var(--hover); }
+      .cal-today-btn {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        background: var(--bg-elev);
+        border-radius: 6px;
+        color: var(--text);
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .cal-today-btn:hover { background: var(--hover); }
+      .cal-field-toggle {
+        margin-left: auto;
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--bg-elev);
+      }
+      .cal-field-toggle button {
+        padding: 4px 12px;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .cal-field-toggle button.active {
+        background: var(--accent, #0071e3);
+        color: #fff;
+      }
+      .cal-field-toggle.disabled { opacity: 0.4; }
+      .cal-field-toggle.disabled button { cursor: not-allowed; }
+      .cal-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        margin-bottom: 4px;
+      }
+      .cal-weekday {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted);
+        padding: 4px 8px;
+      }
+      .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        grid-template-rows: repeat(6, minmax(0, 1fr));
+        gap: 4px;
+        flex: 1;
+        min-height: 0;
+      }
+      .cal-day {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-elev);
+        min-height: 0;
+        min-width: 0;
+        position: relative;
+      }
+      .cal-day.other-month { opacity: 0.4; }
+      .cal-day.today {
+        border-color: var(--accent, #0071e3);
+        box-shadow: inset 0 0 0 1px var(--accent, #0071e3);
+      }
+      .cal-day-num {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+        flex-shrink: 0;
+      }
+      .cal-day.today .cal-day-num { color: var(--accent, #0071e3); font-weight: 700; }
+      .cal-day-notes {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        overflow: hidden;
+        min-height: 0;
+        flex: 1;
+      }
+      .cal-note {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--hover);
+        color: var(--text);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        flex-shrink: 0;
+      }
+      .cal-note > span:not(.cat-dot):not(.sched-glyph) {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+        flex: 1;
+      }
+      .cal-note:hover { background: var(--accent, #0071e3); color: #fff; }
+      .cal-note .cat-dot {
+        width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+      }
+      .cal-note.scheduled {
+        background: color-mix(in oklab, var(--accent, #0071e3) 18%, var(--bg-elev));
+        border: 1px solid color-mix(in oklab, var(--accent, #0071e3) 45%, transparent);
+        padding-left: 4px;
+      }
+      .cal-note.scheduled .sched-glyph { font-size: 9px; opacity: 0.9; }
+      .cal-note[draggable="true"] { cursor: grab; }
+      .cal-more {
+        font-size: 10px;
+        color: var(--text-muted);
+        padding: 1px 6px;
+        cursor: pointer;
+        border-radius: 4px;
+        flex-shrink: 0;
+      }
+      .cal-more:hover { background: var(--hover); color: var(--text); }
+      .cal-day.drop-target {
+        background: color-mix(in oklab, var(--accent, #0071e3) 10%, var(--bg-elev));
+        border-color: var(--accent, #0071e3);
+      }
+      .cal-empty-hint { color: var(--text-muted); font-size: 12px; padding: 12px; text-align: center; }
+      .cal-popover-backdrop {
+        position: fixed; inset: 0; z-index: 60;
+      }
+      .cal-popover {
+        position: fixed;
+        z-index: 61;
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+        padding: 8px;
+        min-width: 200px;
+        max-width: 280px;
+        max-height: 320px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .cal-popover-title {
+        font-size: 11px;
+        color: var(--text-muted);
+        padding: 2px 6px 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
     </style>
   </head>
   <body>
@@ -651,6 +1044,18 @@
         <div class="editor-toolbar"></div>
         <div id="editorContent" class="empty">Select a note</div>
       </section>
+      <section class="pane calendar-pane" id="calendarPane"></section>
+    </div>
+
+    <div class="palette-overlay" id="paletteOverlay" aria-hidden="true">
+      <div class="palette" role="dialog" aria-label="Search notes">
+        <input class="palette-input" id="paletteInput" type="text" placeholder="Search notes…" spellcheck="false" autocomplete="off" />
+        <div class="palette-filters">
+          <label><input type="checkbox" id="paletteTodoFilter" /> Has unchecked items</label>
+          <span class="palette-hint">↑↓ navigate · ↵ open · esc close</span>
+        </div>
+        <div class="palette-list" id="paletteList"></div>
+      </div>
     </div>
 
     <script>
@@ -665,6 +1070,9 @@
       let categories = [];
       let notes = [];
       let activeCategory = "all";
+      let activeView = "notes"; // 'notes' | 'calendar'
+      let calendarMonth = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; })();
+      let calendarField = "modified"; // 'modified' | 'created'
       let activeId = null;
       let saveTimer = null;
       let pending = null;
@@ -703,64 +1111,264 @@
       }
 
       function catById(id) { return categories.find(c => c.id === id); }
+      function catParent(id) { const i = id.lastIndexOf("/"); return i < 0 ? "" : id.slice(0, i); }
+      function catDepth(id) { return id ? id.split("/").length - 1 : 0; }
+      function catChildren(id) { return categories.filter(c => catParent(c.id) === id); }
+      function catBreadcrumb(id) {
+        const parts = id.split("/");
+        return parts.map((_, i) => catById(parts.slice(0, i + 1).join("/"))?.name || parts[i]).join(" / ");
+      }
+
+      const _expRaw = localStorage.getItem("brain.expandedCats");
+      let expandedCats = new Set(_expRaw ? JSON.parse(_expRaw) : []);
+      function saveExpanded() { localStorage.setItem("brain.expandedCats", JSON.stringify([...expandedCats])); }
+      function isCatVisible(id) {
+        let p = catParent(id);
+        while (p) { if (!expandedCats.has(p)) return false; p = catParent(p); }
+        return true;
+      }
+      let includeSubcats = localStorage.getItem("brain.includeSubcats") !== "false";
 
       function renderSidebar() {
         const nonTrash = notes.filter(n => n.category !== TRASH);
         const trashCount = notes.length - nonTrash.length;
+        const flat = categories.filter(c => isCatVisible(c.id));
+        const catRows = flat.map(c => {
+          const depth = catDepth(c.id);
+          const children = catChildren(c.id);
+          const hasChildren = children.length > 0;
+          const isOpen = expandedCats.has(c.id);
+          const directCount = nonTrash.filter(n => n.category === c.id).length;
+          const subCount = nonTrash.filter(n => n.category.startsWith(c.id + "/")).length;
+          const count = directCount + subCount;
+          const chev = hasChildren
+            ? `<span class="chevron" data-toggle="${escapeAttr(c.id)}" style="transform:${isOpen ? 'rotate(90deg)' : 'none'}">▸</span>`
+            : `<span class="chevron spacer">▸</span>`;
+          const canNest = depth < 2;
+          const addSub = canNest
+            ? `<span class="add-sub" data-add-sub="${escapeAttr(c.id)}" title="Add subcategory">+</span>`
+            : "";
+          return `
+            <div class="nav-item ${activeView === 'notes' && activeCategory === c.id ? 'active' : ''}"
+                 data-cat="${escapeAttr(c.id)}" data-cat-item="1"
+                 style="padding-left:${8 + depth * 14}px">
+              <span class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>
+              ${chev}
+              <span class="dot" style="background:${escapeAttr(c.color)}"></span>
+              <span>${escapeHtml(c.name)}</span>
+              ${addSub}
+              <span class="count">${count}</span>
+            </div>`;
+        }).join("");
         const html = `
           <div class="section-label">Library</div>
-          <div class="nav-item ${activeCategory === 'all' ? 'active' : ''}" data-cat="all">
+          <div class="nav-item ${activeView === 'notes' && activeCategory === 'all' ? 'active' : ''}" data-cat="all">
             <span class="dot" style="background:#8e8e93"></span>
             <span>All Notes</span>
             <span class="count">${nonTrash.length}</span>
+          </div>
+          <div class="nav-item ${activeView === 'calendar' ? 'active' : ''}" data-cat="__calendar__">
+            <span class="dot" style="background:#0071e3"></span>
+            <span>Calendar</span>
           </div>
           <div class="section-label" style="margin-top:12px">
             <span>Categories</span>
             <span class="add" id="addCatBtn" title="New category">+</span>
           </div>
-          ${categories.map(c => {
-            const count = nonTrash.filter(n => n.category === c.id).length;
-            return `
-              <div class="nav-item ${activeCategory === c.id ? 'active' : ''}" data-cat="${escapeAttr(c.id)}">
-                <span class="dot" style="background:${escapeAttr(c.color)}"></span>
-                <span>${escapeHtml(c.name)}</span>
-                <span class="count">${count}</span>
-              </div>`;
-          }).join("")}
+          ${catRows}
           <div class="section-label" style="margin-top:12px">Bin</div>
-          <div class="nav-item ${activeCategory === TRASH ? 'active' : ''}" data-cat="${TRASH}">
+          <div class="nav-item ${activeView === 'notes' && activeCategory === TRASH ? 'active' : ''}" data-cat="${TRASH}">
             <span class="dot" style="background:#c7c7cc"></span>
             <span>Trash</span>
             <span class="count">${trashCount}</span>
           </div>
         `;
         $("sidebar").innerHTML = html;
-        $("sidebar").querySelectorAll(".nav-item").forEach(el => {
-          el.onclick = async () => { await flushPending(); activeCategory = el.dataset.cat; activeId = null; await refresh(true); };
+        $("sidebar").querySelectorAll(".chevron[data-toggle]").forEach(el => {
+          el.onclick = (e) => {
+            e.stopPropagation();
+            const id = el.dataset.toggle;
+            if (expandedCats.has(id)) expandedCats.delete(id); else expandedCats.add(id);
+            saveExpanded();
+            renderSidebar();
+          };
         });
-        $("addCatBtn").onclick = (e) => { e.stopPropagation(); openNewCategoryModal(); };
+        $("sidebar").querySelectorAll("[data-add-sub]").forEach(el => {
+          el.onclick = (e) => {
+            e.stopPropagation();
+            const parent = el.dataset.addSub;
+            expandedCats.add(parent); saveExpanded();
+            openNewCategoryModal(parent);
+          };
+        });
+        $("sidebar").querySelectorAll(".nav-item").forEach(el => {
+          el.onclick = async () => {
+            await flushPending();
+            if (el.dataset.cat === '__calendar__') {
+              activeView = 'calendar';
+            } else {
+              activeView = 'notes';
+              activeCategory = el.dataset.cat;
+              activeId = null;
+            }
+            await refresh(true);
+          };
+        });
+        wireCategoryReorder();
+        wireNoteDropOnCats();
+        $("addCatBtn").onclick = (e) => { e.stopPropagation(); openNewCategoryModal(""); };
       }
 
+      const CAT_DRAG_MIME = "application/x-brain-category";
+      const NOTE_DRAG_MIME = "application/x-brain-note";
+      function clearCatDropMarkers() {
+        $("sidebar").querySelectorAll(".drop-before, .drop-after, .drop-into")
+          .forEach(x => x.classList.remove("drop-before", "drop-after", "drop-into"));
+      }
+      function wireCategoryReorder() {
+        const items = $("sidebar").querySelectorAll('.nav-item[data-cat-item="1"]');
+        items.forEach(el => {
+          const handle = el.querySelector(".drag-handle");
+          if (!handle) return;
+          handle.addEventListener("mousedown", () => { el.draggable = true; });
+          handle.addEventListener("click", (e) => e.stopPropagation());
+          el.addEventListener("mouseup", () => { el.draggable = false; });
+          el.addEventListener("dragstart", (e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData(CAT_DRAG_MIME, el.dataset.cat);
+            el.classList.add("dragging");
+          });
+          el.addEventListener("dragend", () => {
+            el.draggable = false;
+            el.classList.remove("dragging");
+            clearCatDropMarkers();
+          });
+          el.addEventListener("dragover", (e) => {
+            if (!e.dataTransfer.types.includes(CAT_DRAG_MIME)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            const rect = el.getBoundingClientRect();
+            const before = (e.clientY - rect.top) < rect.height / 2;
+            clearCatDropMarkers();
+            el.classList.add(before ? "drop-before" : "drop-after");
+          });
+          el.addEventListener("dragleave", (e) => {
+            if (!el.contains(e.relatedTarget)) el.classList.remove("drop-before", "drop-after");
+          });
+          el.addEventListener("drop", async (e) => {
+            if (!e.dataTransfer.types.includes(CAT_DRAG_MIME)) return;
+            e.preventDefault();
+            const src = e.dataTransfer.getData(CAT_DRAG_MIME);
+            const before = el.classList.contains("drop-before");
+            clearCatDropMarkers();
+            if (!src || src === el.dataset.cat) return;
+            const ids = categories.map(c => c.id);
+            const from = ids.indexOf(src);
+            if (from < 0) return;
+            ids.splice(from, 1);
+            let to = ids.indexOf(el.dataset.cat);
+            if (to < 0) return;
+            ids.splice(before ? to : to + 1, 0, src);
+            try {
+              categories = await api.reorderCategories(ids);
+            } catch (err) {
+              console.warn("reorderCategories failed", err);
+              categories = await api.categories();
+            }
+            renderSidebar();
+          });
+        });
+      }
+
+      function wireNoteDropOnCats() {
+        const items = $("sidebar").querySelectorAll('.nav-item[data-cat-item="1"], .nav-item[data-cat="' + TRASH + '"]');
+        items.forEach(el => {
+          el.addEventListener("dragover", (e) => {
+            if (!e.dataTransfer.types.includes(NOTE_DRAG_MIME)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            el.classList.add("drop-into");
+          });
+          el.addEventListener("dragleave", (e) => {
+            if (!el.contains(e.relatedTarget)) el.classList.remove("drop-into");
+          });
+          el.addEventListener("drop", async (e) => {
+            if (!e.dataTransfer.types.includes(NOTE_DRAG_MIME)) return;
+            e.preventDefault();
+            el.classList.remove("drop-into");
+            const rel = e.dataTransfer.getData(NOTE_DRAG_MIME);
+            const dest = el.dataset.cat;
+            if (!rel || !dest) return;
+            if (dest === TRASH) { await trashNote(rel); return; }
+            await moveNoteToCategory(rel, dest);
+          });
+        });
+      }
+
+      async function moveNoteToCategory(relPath, destCat) {
+        const note = notes.find(n => n.relPath === relPath);
+        if (!note || note.category === destCat || note.category === TRASH) return;
+        await flushPending();
+        try {
+          const res = await api.rename({ relPath, newTitle: note.title, newCategory: destCat });
+          activeId = res.relPath;
+          activeCategory = destCat;
+          await refresh();
+        } catch (err) { console.error("move failed", err); }
+      }
+
+      function isCatOrDescendant(id, root) {
+        return id === root || id.startsWith(root + "/");
+      }
       function visibleNotes() {
         let list;
         if (activeCategory === "all") list = notes.filter(n => n.category !== TRASH);
+        else if (activeCategory === TRASH) list = notes.filter(n => n.category === TRASH);
+        else if (includeSubcats && catChildren(activeCategory).length) {
+          list = notes.filter(n => n.category !== TRASH && isCatOrDescendant(n.category, activeCategory));
+        }
         else list = notes.filter(n => n.category === activeCategory);
         return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
       }
 
       function renderList() {
         const list = visibleNotes();
-        $("listTitle").textContent = activeCategory === "all"
-          ? "All Notes"
-          : activeCategory === TRASH ? "Trash"
-          : (catById(activeCategory)?.name || activeCategory);
+        const titleEl = $("listTitle");
+        if (activeCategory === "all") titleEl.textContent = "All Notes";
+        else if (activeCategory === TRASH) titleEl.textContent = "Trash";
+        else titleEl.textContent = catBreadcrumb(activeCategory);
         $("newBtn").style.display = activeCategory === TRASH ? "none" : "";
+
+        // subtree toggle
+        const header = $("listTitle").parentElement;
+        let toggle = header.querySelector(".subtree-toggle");
+        const hasKids = activeCategory !== "all" && activeCategory !== TRASH && catChildren(activeCategory).length > 0;
+        if (hasKids) {
+          if (!toggle) {
+            toggle = document.createElement("label");
+            toggle.className = "subtree-toggle";
+            toggle.innerHTML = `<input type="checkbox" /> Include subcategories`;
+            header.insertBefore(toggle, $("newBtn"));
+            toggle.querySelector("input").onchange = (e) => {
+              includeSubcats = e.target.checked;
+              localStorage.setItem("brain.includeSubcats", String(includeSubcats));
+              renderList();
+            };
+          }
+          toggle.querySelector("input").checked = includeSubcats;
+          toggle.style.display = "";
+        } else if (toggle) {
+          toggle.style.display = "none";
+        }
+
         $("fileList").innerHTML = list.map(n => {
           const date = new Date(n.updatedAt);
           const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-          const meta = n.category === TRASH ? `from ${escapeHtml(n.originalCategory || "")}` : escapeHtml(catById(n.category)?.name || n.category);
+          const meta = n.category === TRASH
+            ? `from ${escapeHtml(n.originalCategory || "")}`
+            : escapeHtml(catBreadcrumb(n.category));
           return `
-            <div class="file-item ${n.relPath === activeId ? 'active' : ''}" data-id="${escapeAttr(n.relPath)}">
+            <div class="file-item ${n.relPath === activeId ? 'active' : ''}" data-id="${escapeAttr(n.relPath)}" draggable="${n.category !== TRASH}">
               <div class="file-name">${escapeHtml(n.title || "Untitled")}</div>
               <div class="file-meta"><span class="date">${dateStr}</span>${meta}</div>
             </div>`;
@@ -775,10 +1383,18 @@
             render();
             showContextMenu(e.clientX, e.clientY, note);
           };
+          el.addEventListener("dragstart", (e) => {
+            const rel = el.dataset.id;
+            const note = notes.find(n => n.relPath === rel);
+            if (!note || note.category === TRASH) { e.preventDefault(); return; }
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData(NOTE_DRAG_MIME, rel);
+            el.classList.add("dragging");
+          });
+          el.addEventListener("dragend", () => el.classList.remove("dragging"));
         });
       }
 
-      // ---------- Paste: HTML -> Markdown ----------
       function handlePaste(e) {
         const cd = e.clipboardData;
         if (!cd) return;
@@ -970,11 +1586,12 @@
         pane.style.flex = "1";
         pane.style.minHeight = "0";
         const readOnly = note.category === TRASH;
+        const savedMode = (localStorage.getItem("brain.editorMode") === "preview") ? "preview" : "edit";
         pane.innerHTML = `
           <div class="meta-bar" id="metaBar"></div>
           <div class="preview-toggle" id="previewToggle" role="tablist">
-            <button type="button" data-mode="edit" class="active" title="Edit (⌘⇧R to toggle)">Edit</button>
-            <button type="button" data-mode="preview" title="Read (⌘⇧R to toggle)">Read</button>
+            <button type="button" data-mode="edit" class="${savedMode === "edit" ? "active" : ""}" title="Edit (⌘⇧R to toggle)">Edit</button>
+            <button type="button" data-mode="preview" class="${savedMode === "preview" ? "active" : ""}" title="Read (⌘⇧R to toggle)">Read</button>
           </div>
           <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" spellcheck="true" ${readOnly ? "readonly" : ""} />
           <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="true"></div>
@@ -1029,11 +1646,14 @@
           previewToggle.querySelectorAll("button").forEach(b =>
             b.classList.toggle("active", b.dataset.mode === mode)
           );
+          try { localStorage.setItem("brain.editorMode", mode); } catch (_) {}
         };
         previewToggle.addEventListener("click", (e) => {
           const b = e.target.closest("button[data-mode]");
           if (b) setEditorMode(b.dataset.mode);
         });
+        // Apply persisted mode on initial render
+        if (savedMode === "preview") setEditorMode("preview");
         // ⌘⇧R (or Ctrl⇧R) toggles Read mode
         const togglePreviewKey = (e) => {
           if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "r" || e.key === "R")) {
@@ -1072,10 +1692,22 @@
           `<span class="tag-chip" data-i="${i}">#${escapeHtml(t)}${readOnly ? "" : '<span class="x" data-remove="' + i + '" title="Remove tag">×</span>'}</span>`
         ).join("");
         const addBtn = readOnly ? "" : `<button class="tag-add" id="addTagBtn">+ tag</button>`;
+        const sched = note.frontmatter?.scheduled || null;
+        let schedHtml = "";
+        if (sched) {
+          const label = formatSchedLabel(sched);
+          if (readOnly) {
+            schedHtml = `<span class="sched-chip" title="Scheduled ${escapeAttr(sched)}"><span class="glyph">◷</span>${escapeHtml(label)}</span>`;
+          } else {
+            schedHtml = `<button type="button" class="sched-chip" id="schedChip" title="Scheduled ${escapeAttr(sched)} — click to change"><span class="glyph">◷</span>${escapeHtml(label)}<span class="x" id="schedRemove" title="Clear scheduled date">×</span></button>`;
+          }
+        } else if (!readOnly) {
+          schedHtml = `<button type="button" class="sched-btn" id="schedBtn" title="Schedule this note"><span class="glyph">◷</span>schedule</button>`;
+        }
         const modified = note.frontmatter?.modified || new Date(note.updatedAt).toISOString();
-        bar.innerHTML = chips + addBtn + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
+        bar.innerHTML = chips + addBtn + schedHtml + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
         if (readOnly) return;
-        bar.querySelectorAll(".x").forEach(el => {
+        bar.querySelectorAll(".tag-chip .x").forEach(el => {
           el.onclick = (e) => {
             e.stopPropagation();
             const i = +el.dataset.remove;
@@ -1088,6 +1720,72 @@
         });
         const addBtnEl = $("addTagBtn");
         if (addBtnEl) addBtnEl.onclick = () => startAddTag(note, readOnly);
+        const closeSchedulePopover = () => document.querySelector(".schedule-popover")?.remove();
+        const setScheduledDate = (v) => {
+          if (!v) return;
+          note.frontmatter = note.frontmatter || {};
+          note.frontmatter.scheduled = v;
+          closeSchedulePopover();
+          renderMetaBar(note, readOnly);
+          queueSave({ scheduled: v });
+        };
+        const openPicker = (anchor) => {
+          if (!anchor) return;
+          closeSchedulePopover();
+          const pop = document.createElement("div");
+          pop.className = "schedule-popover";
+          pop.innerHTML = `<input type="date" aria-label="Pick a scheduled date" value="${escapeAttr(sched || "")}" /><button type="button">Done</button>${sched ? '<button type="button" class="clear">Clear</button>' : ''}`;
+          document.body.appendChild(pop);
+          const rect = anchor.getBoundingClientRect();
+          const popRect = pop.getBoundingClientRect();
+          pop.style.left = `${Math.min(window.innerWidth - popRect.width - 12, Math.max(12, rect.left))}px`;
+          pop.style.top = `${Math.min(window.innerHeight - popRect.height - 12, rect.bottom + 6)}px`;
+          const input = pop.querySelector("input");
+          const done = pop.querySelector("button:not(.clear)");
+          const clear = pop.querySelector(".clear");
+          const onOutside = (event) => {
+            if (!pop.contains(event.target) && event.target !== anchor) {
+              closeSchedulePopover();
+              document.removeEventListener("mousedown", onOutside);
+            }
+          };
+          setTimeout(() => document.addEventListener("mousedown", onOutside), 0);
+          input.focus();
+          if (typeof input.showPicker === "function") {
+            try { input.showPicker(); } catch {}
+          }
+          input.onchange = () => setScheduledDate(input.value);
+          done.onclick = () => setScheduledDate(input.value);
+          if (clear) clear.onclick = () => {
+            note.frontmatter.scheduled = null;
+            closeSchedulePopover();
+            renderMetaBar(note, readOnly);
+            queueSave({ scheduled: null });
+          };
+        };
+        const schedBtn = $("schedBtn");
+        if (schedBtn) schedBtn.onclick = (e) => { e.preventDefault(); openPicker(schedBtn); };
+        const schedChip = $("schedChip");
+        if (schedChip) schedChip.onclick = (e) => {
+          if (e.target.closest("#schedRemove")) return;
+          openPicker(schedChip);
+        };
+        const rm = $("schedRemove");
+        if (rm) rm.onclick = (e) => {
+          e.stopPropagation();
+          note.frontmatter.scheduled = null;
+          closeSchedulePopover();
+          renderMetaBar(note, readOnly);
+          queueSave({ scheduled: null });
+        };
+      }
+
+      function formatSchedLabel(iso) {
+        // iso is YYYY-MM-DD; render as local date, avoiding timezone shift
+        const [y, m, d] = iso.split("-").map(Number);
+        const dt = new Date(y, (m || 1) - 1, d || 1);
+        if (isNaN(dt)) return iso;
+        return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
       }
 
       function startAddTag(note, readOnly) {
@@ -1413,6 +2111,10 @@
           note.frontmatter = note.frontmatter || { tags: [], title: note.title };
           note.frontmatter.tags = patch.tags;
         }
+        if (patch.scheduled !== undefined) {
+          note.frontmatter = note.frontmatter || { tags: [], title: note.title };
+          note.frontmatter.scheduled = patch.scheduled || null;
+        }
         clearTimeout(saveTimer);
         saveTimer = setTimeout(flushPending, 500);
       }
@@ -1427,6 +2129,7 @@
           const patch = {};
           if (p.body !== undefined) patch.body = note.body || "";
           if (p.tags !== undefined) patch.tags = note.frontmatter?.tags || [];
+          if (p.scheduled !== undefined) patch.scheduled = p.scheduled || null;
           if (Object.keys(patch).length > 0) {
             const res = await api.writeNote(note.relPath, patch);
             note.frontmatter = res.frontmatter;
@@ -1483,14 +2186,22 @@
       function hideContextMenu() {
         document.querySelectorAll(".ctx-menu").forEach(el => el.remove());
       }
+      let openSubMenu = null;
+      function hideSubMenu() { if (openSubMenu) { openSubMenu.remove(); openSubMenu = null; } }
       function showContextMenu(x, y, note) {
         hideContextMenu();
         const menu = document.createElement("div");
         menu.className = "ctx-menu";
-        const items = note.category === TRASH
-          ? [{ label: "Restore", action: () => restoreNote(note.relPath) }]
-          : [{ label: "Move to Trash", action: () => trashNote(note.relPath) }];
-        menu.innerHTML = items.map((it, i) => `<div class="ctx-item" data-i="${i}">${it.label}</div>`).join("");
+        const items = [];
+        if (note.category === TRASH) {
+          items.push({ label: "Restore", action: () => restoreNote(note.relPath) });
+        } else {
+          items.push({ label: "Move to…", submenu: true });
+          items.push({ label: "Move to Trash", action: () => trashNote(note.relPath) });
+        }
+        menu.innerHTML = items.map((it, i) =>
+          `<div class="ctx-item ${it.submenu ? 'has-sub' : ''}" data-i="${i}">${it.label}</div>`
+        ).join("");
         document.body.appendChild(menu);
         const rect = menu.getBoundingClientRect();
         const px = Math.min(x, window.innerWidth - rect.width - 8);
@@ -1498,22 +2209,61 @@
         menu.style.left = px + "px";
         menu.style.top = py + "px";
         menu.querySelectorAll(".ctx-item").forEach(el => {
-          el.onclick = () => { hideContextMenu(); items[+el.dataset.i].action(); };
+          const it = items[+el.dataset.i];
+          if (it.submenu) {
+            const open = () => {
+              hideSubMenu();
+              const r = el.getBoundingClientRect();
+              openSubMenu = buildMoveToSubmenu(note, r.right + 2, r.top);
+            };
+            el.onmouseenter = open;
+            el.onclick = (e) => { e.stopPropagation(); open(); };
+          } else {
+            el.onclick = () => { hideContextMenu(); it.action(); };
+          }
         });
       }
+      function buildMoveToSubmenu(note, x, y) {
+        const sub = document.createElement("div");
+        sub.className = "ctx-sub";
+        const rows = categories.map(c => {
+          const depth = catDepth(c.id);
+          const disabled = c.id === note.category;
+          return `<div class="ctx-item indent-${depth} ${disabled ? 'disabled' : ''}"
+                       data-dest="${escapeAttr(c.id)}">${escapeHtml(c.name)}</div>`;
+        }).join("");
+        sub.innerHTML = rows || `<div class="ctx-item disabled">No categories</div>`;
+        document.body.appendChild(sub);
+        const r = sub.getBoundingClientRect();
+        sub.style.left = Math.min(x, window.innerWidth - r.width - 8) + "px";
+        sub.style.top  = Math.min(y, window.innerHeight - r.height - 8) + "px";
+        sub.querySelectorAll("[data-dest]").forEach(el => {
+          if (el.classList.contains("disabled")) return;
+          el.onclick = async (e) => {
+            e.stopPropagation();
+            hideContextMenu();
+            await moveNoteToCategory(note.relPath, el.dataset.dest);
+          };
+        });
+        return sub;
+      }
+      const _origHide = hideContextMenu;
+      hideContextMenu = function() { hideSubMenu(); _origHide(); };
       document.addEventListener("click", hideContextMenu);
       document.addEventListener("contextmenu", (e) => {
         if (!e.target.closest(".file-item")) hideContextMenu();
       });
 
       // ---- New Category Modal ----
-      function openNewCategoryModal() {
+      function openNewCategoryModal(parent) {
+        parent = parent || "";
         const overlay = document.createElement("div");
         overlay.className = "modal-overlay";
         let selectedColor = PRESET_COLORS[0];
+        const title = parent ? `New Subcategory in “${escapeHtml(catBreadcrumb(parent))}”` : "New Category";
         overlay.innerHTML = `
           <div class="modal" role="dialog">
-            <h3>New Category</h3>
+            <h3>${title}</h3>
             <label>Name</label>
             <input type="text" id="catName" placeholder="e.g. Travel" maxlength="60" />
             <label>Color</label>
@@ -1548,8 +2298,9 @@
           if (!name) return;
           createBtn.disabled = true;
           try {
-            const cat = await api.addCategory(name, selectedColor);
+            const cat = await api.addCategory(name, selectedColor, parent);
             close();
+            if (parent) expandedCats.add(parent), saveExpanded();
             activeCategory = cat.id;
             activeId = null;
             await refresh();
@@ -1560,6 +2311,7 @@
         };
         setTimeout(() => nameInput.focus(), 0);
       }
+
 
       async function doExport() {
         await flushPending();
@@ -1587,13 +2339,19 @@
         const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
         const out = [];
         let i = 0;
+        const safeUrl = (u) => {
+          const s = String(u || "").trim();
+          if (/^(https?:|mailto:|#|\/|\.\/|\.\.\/)/i.test(s)) return s;
+          return "#";
+        };
         const renderInline = (s) => {
           const codes = [];
           s = s.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return `\u0000C${codes.length - 1}\u0000`; });
           s = escapeHtml(s);
-          s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img alt="$1" src="$2">');
+          s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => `<img alt="${alt}" src="${escapeAttr(safeUrl(src))}">`);
           s = s.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t, a) => `<a href="#" class="wikilink">${a || t}</a>`);
-          s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+          s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, txt, url) => `<a href="${escapeAttr(safeUrl(url))}" target="_blank" rel="noopener">${txt}</a>`);
+
           s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
           s = s.replace(/__([^_\n]+)__/g, "<strong>$1</strong>");
           s = s.replace(/(^|[^*\w])\*([^*\n]+)\*/g, "$1<em>$2</em>");
@@ -1603,8 +2361,10 @@
           return s;
         };
         const isListLine = (l) => /^(\s*)([-*+]|\d+\.)\s+/.test(l);
+        const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+        const isTableSeparator = (l) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(l);
         const isBlankOrBreak = (l) =>
-          /^\s*$/.test(l) || /^#{1,6}\s/.test(l) || /^```/.test(l) || isListLine(l) || /^>\s?/.test(l) || /^(-\s*-\s*-+|\*\s*\*\s*\*+|_\s*_\s*_+)\s*$/.test(l);
+          /^\s*$/.test(l) || /^#{1,6}\s/.test(l) || /^```/.test(l) || isListLine(l) || /^>\s?/.test(l) || /^(-\s*-\s*-+|\*\s*\*\s*\*+|_\s*_\s*_+)\s*$/.test(l) || isTableRow(l);
         while (i < lines.length) {
           const line = lines[i];
           const fence = line.match(/^```(\w*)\s*$/);
@@ -1646,6 +2406,39 @@
             out.push(`<${tag}>${items.join("")}</${tag}>`);
             continue;
           }
+          if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+            const parseRow = (l) => {
+              let s = l.trim();
+              s = s.replace(/^\|/, "").replace(/\|$/, "");
+              return s.split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, "|"));
+            };
+            const parseAlign = (l) => {
+              let s = l.trim().replace(/^\|/, "").replace(/\|$/, "");
+              return s.split("|").map(c => {
+                const t = c.trim();
+                const L = t.startsWith(":");
+                const R = t.endsWith(":");
+                if (L && R) return "center";
+                if (R) return "right";
+                if (L) return "left";
+                return "";
+              });
+            };
+            const header = parseRow(line);
+            const aligns = parseAlign(lines[i + 1]);
+            i += 2;
+            const rows = [];
+            while (i < lines.length && isTableRow(lines[i]) && !isTableSeparator(lines[i])) {
+              rows.push(parseRow(lines[i])); i++;
+            }
+            const colCount = Math.max(header.length, ...rows.map(r => r.length));
+            const pad = (r) => { while (r.length < colCount) r.push(""); return r; };
+            const styleAttr = (idx) => aligns[idx] ? ` style="text-align:${aligns[idx]}"` : "";
+            const thead = "<thead><tr>" + pad(header).map((c, idx) => `<th${styleAttr(idx)}>${renderInline(c)}</th>`).join("") + "</tr></thead>";
+            const tbody = rows.length ? "<tbody>" + rows.map(r => "<tr>" + pad(r).map((c, idx) => `<td${styleAttr(idx)}>${renderInline(c)}</td>`).join("") + "</tr>").join("") + "</tbody>" : "";
+            out.push(`<table>${thead}${tbody}</table>`);
+            continue;
+          }
           if (/^\s*$/.test(line)) { i++; continue; }
           const buf = [line]; i++;
           while (i < lines.length && !isBlankOrBreak(lines[i])) { buf.push(lines[i]); i++; }
@@ -1654,7 +2447,282 @@
         return out.join("\n");
       }
 
-      async function render() { renderSidebar(); renderList(); await renderEditor(); }
+      async function render() {
+        document.documentElement.setAttribute('data-view', activeView);
+        renderSidebar();
+        if (activeView === 'calendar') {
+          renderCalendar();
+        } else {
+          renderList();
+          await renderEditor();
+        }
+      }
+
+      function noteDateFor(n, field) {
+        const idx = searchIndex.get(n.relPath);
+        const iso = idx && idx[field];
+        if (iso) { const d = new Date(iso); if (!isNaN(d)) return d; }
+        if (field === 'modified' && n.updatedAt) return new Date(n.updatedAt);
+        return null;
+      }
+
+      function sameDay(a, b) {
+        return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      }
+
+      // Calendar source filter: 'both' | 'activity' | 'scheduled'
+      let calendarSource = 'both';
+      const SCHED_DRAG_MIME = "application/x-brain-schedule";
+
+      function scheduledDateFor(n) {
+        const idx = searchIndex.get(n.relPath);
+        const iso = idx && idx.scheduled;
+        if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+        const [y, m, d] = iso.split('-').map(Number);
+        const dt = new Date(y, m - 1, d);
+        return isNaN(dt) ? null : dt;
+      }
+
+      function toIsoDate(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+
+      function renderCalendar() {
+        const pane = $("calendarPane");
+        const year = calendarMonth.getFullYear();
+        const month = calendarMonth.getMonth();
+        const monthLabel = calendarMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        const today = new Date();
+
+        const firstOfMonth = new Date(year, month, 1);
+        // Monday-first: Sun=0 -> 6, Mon=1 -> 0, ...
+        const startOffset = (firstOfMonth.getDay() + 6) % 7;
+        const gridStart = new Date(year, month, 1 - startOffset);
+
+        // Bucket notes by yyyy-mm-dd. Kind: 'activity' | 'scheduled'.
+        // A note can appear as both on the same day (still shown once, marked scheduled).
+        const buckets = new Map();
+        const seen = new Map(); // key -> Set(relPath) to dedupe scheduled+activity same day
+        function push(key, entry) {
+          if (!buckets.has(key)) { buckets.set(key, []); seen.set(key, new Map()); }
+          const seenMap = seen.get(key);
+          const prev = seenMap.get(entry.n.relPath);
+          if (prev) {
+            if (entry.kind === 'scheduled') prev.kind = 'scheduled';
+            return;
+          }
+          seenMap.set(entry.n.relPath, entry);
+          buckets.get(key).push(entry);
+        }
+        const nonTrash = notes.filter(n => n.category !== TRASH);
+        for (const n of nonTrash) {
+          if (calendarSource !== 'scheduled') {
+            const d = noteDateFor(n, calendarField);
+            if (d) {
+              const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+              push(key, { n, d, kind: 'activity' });
+            }
+          }
+          if (calendarSource !== 'activity') {
+            const s = scheduledDateFor(n);
+            if (s) {
+              const key = `${s.getFullYear()}-${s.getMonth()}-${s.getDate()}`;
+              push(key, { n, d: s, kind: 'scheduled' });
+            }
+          }
+        }
+
+        const weekdays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+        const weekdayHtml = weekdays.map(w => `<div class="cal-weekday">${w}</div>`).join('');
+
+        const MAX_VISIBLE = 3;
+        const noteItemHtml = ({ n, kind }) => {
+          const cat = catById(n.category);
+          const color = cat?.color || '#8e8e93';
+          const isSched = kind === 'scheduled';
+          const cls = `cal-note${isSched ? ' scheduled' : ''}`;
+          const drag = isSched ? 'draggable="true"' : '';
+          const glyph = isSched ? '<span class="sched-glyph" title="Scheduled">◷</span>' : `<span class="cat-dot" style="background:${escapeAttr(color)}"></span>`;
+          return `<div class="${cls}" data-id="${escapeAttr(n.relPath)}" data-kind="${kind}" ${drag} title="${escapeAttr(n.title || 'Untitled')}${isSched ? ' — scheduled' : ''}">${glyph}<span>${escapeHtml(n.title || 'Untitled')}</span></div>`;
+        };
+
+        let cellsHtml = '';
+        for (let i = 0; i < 42; i++) {
+          const d = new Date(gridStart);
+          d.setDate(gridStart.getDate() + i);
+          const inMonth = d.getMonth() === month;
+          const isToday = sameDay(d, today);
+          const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+          const iso = toIsoDate(d);
+          const items = (buckets.get(key) || []).sort((a, b) => {
+            // scheduled first, then by date desc
+            if (a.kind !== b.kind) return a.kind === 'scheduled' ? -1 : 1;
+            return b.d - a.d;
+          });
+          const visible = items.slice(0, MAX_VISIBLE);
+          const hidden = items.length - visible.length;
+          const notesHtml = visible.map(noteItemHtml).join('');
+          const moreHtml = hidden > 0
+            ? `<div class="cal-more" data-more="${iso}">+${hidden} more</div>`
+            : '';
+          cellsHtml += `
+            <div class="cal-day ${inMonth ? '' : 'other-month'} ${isToday ? 'today' : ''}" data-iso="${iso}">
+              <div class="cal-day-num">${d.getDate()}</div>
+              <div class="cal-day-notes">${notesHtml}${moreHtml}</div>
+            </div>`;
+        }
+
+        const fieldDisabled = calendarSource === 'scheduled';
+        pane.innerHTML = `
+          <div class="cal-header">
+            <button class="cal-nav-btn" id="calPrev" title="Previous month" aria-label="Previous month">‹</button>
+            <div class="cal-title">${monthLabel}</div>
+            <button class="cal-nav-btn" id="calNext" title="Next month" aria-label="Next month">›</button>
+            <button class="cal-today-btn" id="calToday">Today</button>
+            <div class="cal-field-toggle" role="tablist" aria-label="Show" style="margin-left:auto">
+              <button class="${calendarSource === 'both' ? 'active' : ''}" data-source="both">Both</button>
+              <button class="${calendarSource === 'activity' ? 'active' : ''}" data-source="activity">Activity</button>
+              <button class="${calendarSource === 'scheduled' ? 'active' : ''}" data-source="scheduled">Scheduled</button>
+            </div>
+            <div class="cal-field-toggle ${fieldDisabled ? 'disabled' : ''}" role="tablist" aria-label="Activity date field" title="${fieldDisabled ? 'Not applicable in Scheduled view' : ''}">
+              <button class="${calendarField === 'modified' ? 'active' : ''}" data-field="modified" ${fieldDisabled ? 'disabled aria-disabled="true"' : ''}>Modified</button>
+              <button class="${calendarField === 'created' ? 'active' : ''}" data-field="created" ${fieldDisabled ? 'disabled aria-disabled="true"' : ''}>Created</button>
+            </div>
+          </div>
+          <div class="cal-weekdays">${weekdayHtml}</div>
+          <div class="cal-grid">${cellsHtml}</div>
+        `;
+
+        // Popover for "+N more"
+        function closePopover() {
+          document.querySelectorAll('.cal-popover, .cal-popover-backdrop').forEach(el => el.remove());
+        }
+        pane.querySelectorAll('.cal-more').forEach(m => {
+          m.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closePopover();
+            const iso = m.dataset.more;
+            const cell = m.closest('.cal-day');
+            const key = (() => {
+              const [y, mo, da] = iso.split('-').map(Number);
+              return `${y}-${mo - 1}-${da}`;
+            })();
+            const items = (buckets.get(key) || []).sort((a, b) => {
+              if (a.kind !== b.kind) return a.kind === 'scheduled' ? -1 : 1;
+              return b.d - a.d;
+            });
+            const backdrop = document.createElement('div');
+            backdrop.className = 'cal-popover-backdrop';
+            backdrop.onclick = closePopover;
+            const pop = document.createElement('div');
+            pop.className = 'cal-popover';
+            const [y, mo, da] = iso.split('-').map(Number);
+            const dt = new Date(y, mo - 1, da);
+            pop.innerHTML = `<div class="cal-popover-title">${escapeHtml(dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }))}</div>` + items.map(noteItemHtml).join('');
+            document.body.appendChild(backdrop);
+            document.body.appendChild(pop);
+            const rect = cell.getBoundingClientRect();
+            const popW = 240;
+            let left = rect.left;
+            if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+            let top = rect.bottom + 4;
+            const popH = Math.min(320, 40 + items.length * 22);
+            if (top + popH > window.innerHeight - 8) top = Math.max(8, rect.top - popH - 4);
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+            pop.querySelectorAll('.cal-note').forEach(el => {
+              el.addEventListener('click', async () => {
+                const relPath = el.dataset.id;
+                const n = notes.find(x => x.relPath === relPath);
+                if (!n) return;
+                closePopover();
+                activeView = 'notes';
+                activeCategory = 'all';
+                activeId = relPath;
+                await render();
+              });
+              if (el.getAttribute('draggable') === 'true') {
+                el.addEventListener('dragstart', (ev) => {
+                  ev.stopPropagation();
+                  ev.dataTransfer.effectAllowed = 'move';
+                  ev.dataTransfer.setData(SCHED_DRAG_MIME, el.dataset.id);
+                  try { ev.dataTransfer.setData('text/plain', el.dataset.id); } catch {}
+                });
+              }
+            });
+          });
+        });
+
+        $("calPrev").onclick = () => { calendarMonth = new Date(year, month - 1, 1); renderCalendar(); };
+        $("calNext").onclick = () => { calendarMonth = new Date(year, month + 1, 1); renderCalendar(); };
+        $("calToday").onclick = () => {
+          const t = new Date(); t.setDate(1); t.setHours(0,0,0,0);
+          calendarMonth = t;
+          renderCalendar();
+        };
+        pane.querySelectorAll('[data-field]').forEach(btn => {
+          btn.onclick = () => { if (btn.disabled) return; calendarField = btn.dataset.field; renderCalendar(); };
+        });
+        pane.querySelectorAll('[data-source]').forEach(btn => {
+          btn.onclick = () => { calendarSource = btn.dataset.source; renderCalendar(); };
+        });
+        pane.querySelectorAll('.cal-note').forEach(el => {
+          el.addEventListener('click', async (e) => {
+            const relPath = el.dataset.id;
+            const n = notes.find(x => x.relPath === relPath);
+            if (!n) return;
+            activeView = 'notes';
+            activeCategory = 'all';
+            activeId = relPath;
+            await render();
+          });
+          if (el.getAttribute('draggable') === 'true') {
+            el.addEventListener('dragstart', (e) => {
+              e.stopPropagation();
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData(SCHED_DRAG_MIME, el.dataset.id);
+              // also set a harmless text fallback (some platforms need any data)
+              try { e.dataTransfer.setData('text/plain', el.dataset.id); } catch {}
+            });
+          }
+        });
+        pane.querySelectorAll('.cal-day').forEach(cell => {
+          cell.addEventListener('dragover', (e) => {
+            if (!Array.from(e.dataTransfer.types).includes(SCHED_DRAG_MIME)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            cell.classList.add('drop-target');
+          });
+          cell.addEventListener('dragleave', () => cell.classList.remove('drop-target'));
+          cell.addEventListener('drop', async (e) => {
+            if (!Array.from(e.dataTransfer.types).includes(SCHED_DRAG_MIME)) return;
+            e.preventDefault();
+            cell.classList.remove('drop-target');
+            const relPath = e.dataTransfer.getData(SCHED_DRAG_MIME);
+            const iso = cell.dataset.iso;
+            if (!relPath || !iso) return;
+            const n = notes.find(x => x.relPath === relPath);
+            if (!n) return;
+            if ((n.frontmatter?.scheduled || null) === iso) return;
+            n.frontmatter = n.frontmatter || {};
+            n.frontmatter.scheduled = iso;
+            const idx = searchIndex.get(relPath);
+            if (idx) idx.scheduled = iso;
+            renderCalendar();
+            try {
+              const res = await api.writeNote(relPath, { scheduled: iso, bumpModified: false });
+              n.frontmatter = res.frontmatter;
+              const idx2 = searchIndex.get(relPath);
+              if (idx2) idx2.scheduled = res.frontmatter?.scheduled || null;
+            } catch (err) {
+              console.error('reschedule failed', err);
+            }
+          });
+        });
+      }
 
       $("newBtn").onclick = newNote;
       $("exportBtn").onclick = doExport;
@@ -1687,7 +2755,201 @@
           if (pending) return;
           await refresh();
         }, 250);
+        // Update the search index for the changed paths (fast, no full re-index)
+        reindexPaths(paths || []);
       });
+
+      // ---------- Command palette search ----------
+      const searchIndex = new Map(); // relPath -> { relPath, title, category, body, hasUnchecked }
+      let paletteOpen = false;
+      let paletteResults = [];
+      let paletteActiveIdx = 0;
+
+      function computeHasUnchecked(body) {
+        return /(^|\n)\s*[-*+]\s+\[ \]\s+/.test(body || "");
+      }
+
+      async function indexNote(n) {
+        try {
+          const r = await api.readNote(n.relPath);
+          const body = r.body || "";
+          if (!pending || pending._for !== n.relPath) n.frontmatter = r.frontmatter;
+          searchIndex.set(n.relPath, {
+            relPath: n.relPath,
+            title: n.title || "",
+            category: n.category,
+            body,
+            created: r.frontmatter?.created || null,
+            modified: r.frontmatter?.modified || null,
+            scheduled: r.frontmatter?.scheduled || null,
+            hasUnchecked: computeHasUnchecked(body),
+          });
+        } catch {}
+      }
+
+      async function rebuildSearchIndex() {
+        const nonTrash = notes.filter(n => n.category !== TRASH);
+        const seen = new Set(nonTrash.map(n => n.relPath));
+        for (const k of [...searchIndex.keys()]) if (!seen.has(k)) searchIndex.delete(k);
+        const missing = nonTrash.filter(n => !searchIndex.has(n.relPath));
+        await Promise.all(missing.map(indexNote));
+        if (paletteOpen) renderPaletteResults();
+        if (activeView === 'calendar') renderCalendar();
+      }
+
+      async function reindexPaths(paths) {
+        for (const p of paths) {
+          const norm = p.split(/[\\\\/]/).join("/");
+          const n = notes.find(x => x.relPath.split(/[\\\\/]/).join("/") === norm);
+          if (!n || n.category === TRASH) { searchIndex.delete(p); continue; }
+          await indexNote(n);
+        }
+        if (paletteOpen) renderPaletteResults();
+      }
+
+      function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+      function paletteSearch(q, todoOnly) {
+        const items = [...searchIndex.values()];
+        const filtered = todoOnly ? items.filter(i => i.hasUnchecked) : items;
+        if (!q.trim()) {
+          return filtered
+            .slice()
+            .sort((a, b) => (a.title || "").localeCompare(b.title || ""))
+            .slice(0, 50)
+            .map(i => ({ ...i, matchIn: "none", matchIdx: -1, score: 0 }));
+        }
+        const needle = q.toLowerCase();
+        const scored = [];
+        for (const i of filtered) {
+          const t = (i.title || "").toLowerCase();
+          const b = (i.body || "").toLowerCase();
+          const ti = t.indexOf(needle);
+          const bi = b.indexOf(needle);
+          if (ti === -1 && bi === -1) continue;
+          const score = ti !== -1 ? 1000 - ti : 100 - Math.min(bi, 100);
+          scored.push({ ...i, matchIn: ti !== -1 ? "title" : "body", matchIdx: ti !== -1 ? ti : bi, score });
+        }
+        scored.sort((a, b) => b.score - a.score);
+        return scored.slice(0, 50);
+      }
+
+      function highlightMatch(text, q) {
+        if (!q) return escapeHtml(text);
+        const re = new RegExp(escapeRegex(q), "ig");
+        let last = 0, out = "", m;
+        while ((m = re.exec(text))) {
+          out += escapeHtml(text.slice(last, m.index)) + "<mark>" + escapeHtml(m[0]) + "</mark>";
+          last = m.index + m[0].length;
+          if (m[0].length === 0) re.lastIndex++;
+        }
+        out += escapeHtml(text.slice(last));
+        return out;
+      }
+
+      function snippetFor(body, idx, q) {
+        if (idx < 0) return "";
+        const start = Math.max(0, idx - 32);
+        const end = Math.min(body.length, idx + q.length + 80);
+        let s = body.slice(start, end).replace(/\s+/g, " ").trim();
+        if (start > 0) s = "…" + s;
+        if (end < body.length) s = s + "…";
+        return highlightMatch(s, q);
+      }
+
+      function renderPaletteResults() {
+        const q = $("paletteInput").value;
+        const todoOnly = $("paletteTodoFilter").checked;
+        paletteResults = paletteSearch(q, todoOnly);
+        if (paletteActiveIdx >= paletteResults.length) paletteActiveIdx = 0;
+        const list = $("paletteList");
+        if (!paletteResults.length) {
+          list.innerHTML = `<div class="palette-empty">${q || todoOnly ? "No matches" : "Type to search…"}</div>`;
+          return;
+        }
+        list.innerHTML = paletteResults.map((r, i) => {
+          const catName = catById(r.category)?.name || r.category;
+          let snippet = "";
+          if (r.matchIn === "body") snippet = snippetFor(r.body, r.matchIdx, q);
+          else {
+            const firstLine = (r.body || "").split("\n").find(l => l.trim()) || "";
+            snippet = escapeHtml(firstLine.slice(0, 140));
+          }
+          return `<div class="palette-item ${i === paletteActiveIdx ? "active" : ""}" data-idx="${i}">
+            <div><span class="p-title">${highlightMatch(r.title || "Untitled", q)}</span><span class="p-cat">${escapeHtml(catName)}</span></div>
+            ${snippet ? `<div class="p-snippet">${snippet}</div>` : ""}
+          </div>`;
+        }).join("");
+        list.querySelectorAll(".palette-item").forEach(el => {
+          el.onmouseenter = () => { paletteActiveIdx = +el.dataset.idx; updatePaletteActive(); };
+          el.onclick = () => { paletteActiveIdx = +el.dataset.idx; openPaletteSelection(); };
+        });
+        scrollPaletteActiveIntoView();
+      }
+
+      function updatePaletteActive() {
+        $("paletteList").querySelectorAll(".palette-item").forEach((el, i) => {
+          el.classList.toggle("active", i === paletteActiveIdx);
+        });
+        scrollPaletteActiveIntoView();
+      }
+      function scrollPaletteActiveIntoView() {
+        const el = $("paletteList").querySelector(".palette-item.active");
+        if (el) el.scrollIntoView({ block: "nearest" });
+      }
+
+      async function openPalette() {
+        paletteOpen = true;
+        $("paletteOverlay").classList.add("open");
+        $("paletteInput").value = "";
+        paletteActiveIdx = 0;
+        $("paletteInput").focus();
+        renderPaletteResults();
+        await rebuildSearchIndex();
+      }
+      function closePalette() {
+        paletteOpen = false;
+        $("paletteOverlay").classList.remove("open");
+      }
+
+      async function openPaletteSelection() {
+        const r = paletteResults[paletteActiveIdx];
+        if (!r) return;
+        closePalette();
+        await flushPending();
+        activeCategory = r.category;
+        activeId = r.relPath;
+        await render();
+      }
+
+      $("paletteInput").addEventListener("input", renderPaletteResults);
+      $("paletteTodoFilter").addEventListener("change", renderPaletteResults);
+      $("paletteInput").addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown") { e.preventDefault(); paletteActiveIdx = Math.min(paletteResults.length - 1, paletteActiveIdx + 1); updatePaletteActive(); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); paletteActiveIdx = Math.max(0, paletteActiveIdx - 1); updatePaletteActive(); }
+        else if (e.key === "Enter") { e.preventDefault(); openPaletteSelection(); }
+        else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
+      });
+      $("paletteOverlay").addEventListener("mousedown", (e) => {
+        if (e.target === $("paletteOverlay")) closePalette();
+      });
+      window.addEventListener("keydown", (e) => {
+        const mod = e.metaKey || e.ctrlKey;
+        if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          if (paletteOpen) closePalette(); else openPalette();
+        } else if (e.key === "Escape" && paletteOpen) {
+          e.preventDefault();
+          closePalette();
+        }
+      });
+
+      // Warm the search index once the vault is loaded
+      const _origRefresh = refresh;
+      refresh = async function(selectFirst) {
+        await _origRefresh(selectFirst);
+        rebuildSearchIndex();
+      };
 
       // Keep the "edited X ago" label fresh
       setInterval(() => {
