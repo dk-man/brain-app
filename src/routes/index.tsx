@@ -4,7 +4,7 @@ import brainScreenshot from "../assets/Brain_v0.3.png.asset.json";
 const GITHUB_URL = "https://github.com/dk-man/brain-app";
 const RELEASES_URL = "https://github.com/dk-man/brain-app/releases/latest";
 const DOWNLOAD_URL =
-  "https://github.com/dk-man/brain-app/releases/download/v0.4.0/Brain-darwin-arm64.zip";
+  "https://github.com/dk-man/brain-app/releases/download/v0.4.0/Brain-darwin-arm64-develop.zip";
 const BASE_URL = "https://alexlabs.dev";
 
 export const Route = createFileRoute("/")({
