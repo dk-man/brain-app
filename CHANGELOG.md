@@ -4,6 +4,61 @@ All notable changes to Brain are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-07-29
+
+### Added
+- **Calendar view.** A new `Calendar` entry in the sidebar opens a
+  month-grid view of note activity. Each day cell lists the notes whose
+  date falls on that day, today's cell is highlighted, and the week
+  starts on Monday. A toggle switches between three modes: `Created`,
+  `Modified`, and `Scheduled`. Day cells clip after three entries and
+  reveal the rest through a `+N more` popover, so a busy day never
+  breaks the grid.
+- **Scheduled notes.** Notes can now be assigned to a specific day via
+  an optional `scheduled: YYYY-MM-DD` field in their YAML frontmatter.
+  A small `Schedule` button appears next to the tag chips on every
+  note — click it to pick a date, or clear it to unschedule. Scheduled
+  notes show up on that day in the calendar's Scheduled mode, and can
+  be **dragged from one day cell to another** to reschedule; the file's
+  frontmatter is rewritten in place.
+- **Nested categories (up to 3 levels).** Categories can now contain
+  subcategories. Expand any category in the sidebar with its chevron,
+  or hover it and click `+` to add a child. Each subcategory is a real
+  folder on disk (e.g. `Work/Projects/Q3`), so the vault stays fully
+  Obsidian- and Finder-compatible. When a category has children, an
+  `Include subcategories` toggle appears in its note list so you can
+  view just that folder or every note beneath it.
+- **Move notes between categories.** Drag any note from the list onto a
+  category in the sidebar to move it, or right-click a note and pick
+  `Move to…` to choose a destination from the full nested tree. The
+  underlying `.md` file is moved on disk; wikilinks, backlinks, and
+  scheduled dates are preserved.
+- **Persistent Edit / Read mode.** The `Edit | Read` choice now sticks
+  across notes and categories. Switch to Read once and every note you
+  open stays in Read until you switch back. The preference persists
+  across app launches.
+
+### Changed
+- **Schedule chip is now a real button.** The scheduling control's
+  entire surface is clickable and opens a compact date popover, instead
+  of relying on a hidden native picker that was only clickable near the
+  right edge.
+- **Restoring from Trash returns to the exact original location.** Notes
+  moved to Trash now record their original nested category in
+  frontmatter (`originalCategory`), so `Restore` puts them back exactly
+  where they came from — including deep subfolders.
+
+### Fixed
+- **GFM tables render in Read mode.** Tables written in GitHub-Flavored
+  Markdown (including per-column alignment `:---`, `:--:`, `---:`) now
+  render as proper HTML tables in Read mode. Previously they collapsed
+  into a single paragraph. Especially useful when pasting tables from
+  ChatGPT or other Markdown sources.
+- **Calendar mode toggle no longer misleads.** In `Scheduled` mode, the
+  `Created / Modified` sub-toggle is disabled — it did nothing there and
+  now says so.
+
+
 ## [0.3.0] — 2026-07-13
 
 ### Added
