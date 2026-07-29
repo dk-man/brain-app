@@ -43,23 +43,58 @@ function sanitize(name) {
     .slice(0, 120) || "Untitled";
 }
 
-function sanitizeCategoryId(name) {
+function sanitizeSegment(name) {
   return String(name || "")
     .replace(/[\\/:*?"<>|.]/g, "-")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 60);
 }
+// Back-compat alias — legacy single-segment sanitizer
+const sanitizeCategoryId = sanitizeSegment;
+
+const MAX_CAT_DEPTH = 3;
+function sanitizeCategoryPath(pathStr) {
+  return String(pathStr || "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .map(sanitizeSegment)
+    .filter(Boolean)
+    .slice(0, MAX_CAT_DEPTH)
+    .join("/");
+}
+
+// Given a note relPath, return the deepest matching category id.
+function categoryOf(relPath, categoryIds) {
+  const parts = String(relPath || "").split(path.sep);
+  if (!parts.length) return "";
+  if (parts[0] === TRASH) return TRASH;
+  for (let n = Math.min(parts.length - 1, MAX_CAT_DEPTH); n >= 1; n--) {
+    const candidate = parts.slice(0, n).join("/");
+    if (categoryIds.includes(candidate)) return candidate;
+  }
+  return parts[0];
+}
 
 async function listCategoryDirsOnDisk() {
-  try {
-    const entries = await fs.readdir(rootDir(), { withFileTypes: true });
-    return entries
-      .filter((e) => e.isDirectory() && e.name !== TRASH && !e.name.startsWith("."))
-      .map((e) => e.name);
-  } catch {
-    return [];
+  const root = rootDir();
+  const out = [];
+  async function walk(rel, depth) {
+    if (depth > MAX_CAT_DEPTH) return;
+    const full = rel ? path.join(root, rel) : root;
+    let entries;
+    try { entries = await fs.readdir(full, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith(".")) continue;
+      if (!rel && e.name === TRASH) continue;
+      const childRel = rel ? `${rel}/${e.name}` : e.name;
+      out.push(childRel);
+      await walk(childRel, depth + 1);
+    }
   }
+  await walk("", 1);
+  return out;
 }
 
 async function loadCategories() {
@@ -87,7 +122,7 @@ async function loadCategories() {
   const extras = diskDirs
     .filter((d) => !knownIds.has(d))
     .sort((a, b) => a.localeCompare(b))
-    .map((d) => ({ id: d, name: d, color: "#8e8e93" }));
+    .map((d) => ({ id: d, name: d.split("/").pop(), color: "#8e8e93" }));
   const final = [...kept, ...extras];
   const changed =
     final.length !== stored.length ||
@@ -130,17 +165,26 @@ async function ensureDirs() {
   return cats;
 }
 
-async function addCategory({ name, color }) {
+async function addCategory({ name, color, parent }) {
   const cats = await loadCategories();
-  const baseId = sanitizeCategoryId(name);
-  if (!baseId) throw new Error("Invalid category name");
-  if (baseId === TRASH) throw new Error("Reserved name");
+  const seg = sanitizeSegment(name);
+  if (!seg) throw new Error("Invalid category name");
+  if (seg === TRASH) throw new Error("Reserved name");
+  let parentPath = "";
+  if (parent) {
+    parentPath = sanitizeCategoryPath(parent);
+    if (!cats.find((c) => c.id === parentPath)) throw new Error("Parent category not found");
+  }
+  const depth = parentPath ? parentPath.split("/").length : 0;
+  if (depth >= MAX_CAT_DEPTH) throw new Error(`Max nesting depth is ${MAX_CAT_DEPTH}`);
+  const baseId = parentPath ? `${parentPath}/${seg}` : seg;
   let id = baseId;
   let i = 2;
   while (cats.find((c) => c.id.toLowerCase() === id.toLowerCase())) {
     id = `${baseId} ${i++}`;
   }
-  const cat = { id, name: id, color: color || "#8e8e93" };
+  const leaf = id.split("/").pop();
+  const cat = { id, name: leaf, color: color || "#8e8e93" };
   cats.push(cat);
   await saveCategories(cats);
   await fs.mkdir(path.join(rootDir(), id), { recursive: true });
@@ -294,7 +338,8 @@ async function ensureFrontmatter(relPath) {
   let title;
   if (isTrash) {
     const cats = await loadCategories();
-    title = parseTrashName(path.basename(relPath), cats.map((c) => c.id)).title;
+    const topIds = Array.from(new Set(cats.map((c) => c.id.split("/")[0])));
+    title = parseTrashName(path.basename(relPath), topIds).title;
   } else {
     title = path.basename(relPath, ".md");
   }
@@ -308,6 +353,7 @@ async function ensureFrontmatter(relPath) {
   };
   const passSched = normScheduled(parsed.fm?.scheduled);
   if (passSched) merged.scheduled = passSched;
+  if (parsed.fm?.originalCategory) merged.originalCategory = String(parsed.fm.originalCategory);
   const body = parsed.fm ? parsed.body : raw;
   const newRaw = serializeFrontmatter(merged) + body;
   await writeFileTracked(full, newRaw);
@@ -316,7 +362,7 @@ async function ensureFrontmatter(relPath) {
   return { frontmatter: merged, body, injected: true };
 }
 
-async function writeNote(relPath, { body, title, tags, scheduled, bumpModified = true }) {
+async function writeNote(relPath, { body, title, tags, scheduled, originalCategory, bumpModified = true }) {
   const full = safeJoin(relPath);
   let existing = { fm: null, body: "" };
   try {
@@ -336,6 +382,12 @@ async function writeNote(relPath, { body, title, tags, scheduled, bumpModified =
   else if (scheduled === null || scheduled === "") nextSched = null;
   else nextSched = normScheduled(scheduled);
   if (nextSched) merged.scheduled = nextSched;
+  // originalCategory: undefined = keep existing; null/"" = clear; string = set
+  let nextOrig;
+  if (originalCategory === undefined) nextOrig = existing.fm?.originalCategory ? String(existing.fm.originalCategory) : null;
+  else if (originalCategory === null || originalCategory === "") nextOrig = null;
+  else nextOrig = String(originalCategory);
+  if (nextOrig) merged.originalCategory = nextOrig;
   const newBody = body !== undefined ? body : existing.body;
   const raw = serializeFrontmatter(merged) + newBody;
   await writeFileTracked(full, raw);
@@ -345,26 +397,40 @@ async function writeNote(relPath, { body, title, tags, scheduled, bumpModified =
 async function listAll() {
   const cats = await ensureDirs();
   const ids = cats.map((c) => c.id);
-  const allFolders = [...ids, TRASH];
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
   const root = rootDir();
   const entries = [];
-  const dirs = await fs.readdir(root, { withFileTypes: true });
-  for (const c of dirs) {
-    if (!c.isDirectory()) continue;
-    if (!allFolders.includes(c.name)) continue;
-    const catDir = path.join(root, c.name);
-    const files = await fs.readdir(catDir, { withFileTypes: true });
+  const folders = [...ids.map((id) => ({ folder: id, isTrash: false })), { folder: TRASH, isTrash: true }];
+  for (const spec of folders) {
+    const catDir = path.join(root, spec.folder);
+    let files;
+    try { files = await fs.readdir(catDir, { withFileTypes: true }); } catch { continue; }
     for (const f of files) {
       if (!f.isFile() || !f.name.endsWith(".md")) continue;
       const full = path.join(catDir, f.name);
       const stat = await fs.stat(full);
-      const isTrash = c.name === TRASH;
-      const parsed = isTrash ? parseTrashName(f.name, ids) : null;
+      let title, origCat = null;
+      if (spec.isTrash) {
+        // Prefer frontmatter, fall back to filename convention
+        try {
+          const raw = await fs.readFile(full, "utf8");
+          const p = parseFrontmatter(raw);
+          if (p.fm?.originalCategory) origCat = String(p.fm.originalCategory);
+          if (p.fm?.title) title = String(p.fm.title);
+        } catch {}
+        if (!title || !origCat) {
+          const parsed = parseTrashName(f.name, topIds);
+          if (!title) title = parsed.title;
+          if (!origCat) origCat = parsed.originalCategory;
+        }
+      } else {
+        title = f.name.replace(/\.md$/, "");
+      }
       entries.push({
-        relPath: path.join(c.name, f.name),
-        category: c.name,
-        title: isTrash ? parsed.title : f.name.replace(/\.md$/, ""),
-        originalCategory: isTrash ? parsed.originalCategory : null,
+        relPath: path.join(spec.folder, f.name),
+        category: spec.folder,
+        title,
+        originalCategory: spec.isTrash ? origCat : null,
         updatedAt: stat.mtimeMs,
       });
     }
@@ -431,11 +497,17 @@ async function trashNote(relPath) {
   const ids = cats.map((c) => c.id);
   const root = rootDir();
   const oldFull = safeJoin(relPath);
-  const parts = relPath.split(path.sep);
-  const cat = parts[0];
+  const cat = categoryOf(relPath, ids);
   if (cat === TRASH) return { relPath };
-  const filename = parts.slice(1).join(path.sep).replace(/\.md$/, "");
-  const newBase = `${ids.includes(cat) ? cat : (ids[0] || "Work")}${TRASH_SEP}${filename}`;
+  const filename = path.basename(relPath, ".md");
+  // Persist full nested category path in frontmatter so restore is exact
+  try {
+    await writeNote(relPath, { originalCategory: cat, bumpModified: false });
+  } catch {}
+  const topCat = cat.split("/")[0];
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
+  const legacyPrefix = topIds.includes(topCat) ? topCat : (topIds[0] || "Work");
+  const newBase = `${legacyPrefix}${TRASH_SEP}${filename}`;
   const trashDir = path.join(root, TRASH);
   await fs.mkdir(trashDir, { recursive: true });
   const target = await uniquePath(trashDir, newBase, ".md");
@@ -450,13 +522,28 @@ async function restoreNote(relPath) {
   const oldFull = safeJoin(relPath);
   const parts = relPath.split(path.sep);
   if (parts[0] !== TRASH) return { relPath };
-  const parsed = parseTrashName(parts[parts.length - 1], ids);
-  const cat = ids.includes(parsed.originalCategory) ? parsed.originalCategory : (ids[0] || "Work");
+  // Prefer frontmatter for exact nested restore
+  let title = null, origCat = null;
+  try {
+    const raw = await fs.readFile(oldFull, "utf8");
+    const p = parseFrontmatter(raw);
+    if (p.fm?.originalCategory) origCat = String(p.fm.originalCategory);
+    if (p.fm?.title) title = String(p.fm.title);
+  } catch {}
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
+  const parsed = parseTrashName(parts[parts.length - 1], topIds);
+  if (!title) title = parsed.title;
+  if (!origCat) origCat = parsed.originalCategory;
+  let cat = ids.includes(origCat) ? origCat : null;
+  if (!cat) cat = ids.find((x) => x === (origCat || "").split("/")[0]) || ids[0] || "Work";
   const dir = path.join(root, cat);
   await fs.mkdir(dir, { recursive: true });
-  const target = await uniquePath(dir, sanitize(parsed.title), ".md");
+  const target = await uniquePath(dir, sanitize(title), ".md");
   await renameTracked(oldFull, target);
-  return { relPath: path.relative(root, target) };
+  // Clear originalCategory from frontmatter now that it's restored
+  const newRel = path.relative(root, target);
+  try { await writeNote(newRel, { originalCategory: null, bumpModified: false }); } catch {}
+  return { relPath: newRel };
 }
 
 async function exportAll() {
@@ -499,26 +586,29 @@ async function importAll() {
   if (Array.isArray(data.categories)) {
     for (const c of data.categories) {
       if (!c?.id) continue;
-      const safeId = sanitizeCategoryId(c.id);
+      const safeId = sanitizeCategoryPath(c.id);
       if (!safeId || safeId === TRASH) continue;
       if (!cats.find((x) => x.id.toLowerCase() === safeId.toLowerCase())) {
-        cats.push({ id: safeId, name: c.name || safeId, color: c.color || "#8e8e93" });
+        const leaf = safeId.split("/").pop();
+        cats.push({ id: safeId, name: c.name || leaf, color: c.color || "#8e8e93" });
       }
     }
     await saveCategories(cats);
   }
   await ensureDirs();
   const ids = cats.map((c) => c.id);
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
   let imported = 0;
   for (const n of data.notes) {
-    const rawCat = n.category === TRASH ? TRASH : sanitizeCategoryId(n.category || "");
+    const rawCat = n.category === TRASH ? TRASH : sanitizeCategoryPath(n.category || "");
     const cat = rawCat === TRASH ? TRASH : (ids.includes(rawCat) ? rawCat : (ids[0] || "Work"));
     const dir = safeJoin(cat);
     await fs.mkdir(dir, { recursive: true });
     const baseTitle = sanitize(n.title || "Untitled");
-    const safeOrig = sanitizeCategoryId(n.originalCategory || "");
+    const safeOrig = sanitizeCategoryPath(n.originalCategory || "");
+    const legacyPrefix = safeOrig ? safeOrig.split("/")[0] : "";
     const base = cat === TRASH
-      ? `${safeOrig && ids.includes(safeOrig) ? safeOrig : (ids[0] || "Work")}${TRASH_SEP}${baseTitle}`
+      ? `${legacyPrefix && topIds.includes(legacyPrefix) ? legacyPrefix : (topIds[0] || "Work")}${TRASH_SEP}${baseTitle}`
       : baseTitle;
     const target = await uniquePath(dir, base, ".md");
     await writeFileTracked(target, n.body || "");
@@ -741,12 +831,13 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:rename", async (_e, { relPath, newTitle, newCategory }) => {
     const cats = await loadCategories();
     const ids = cats.map((c) => c.id);
+    const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
     const oldFull = safeJoin(relPath);
-    const currentCat = relPath.split(path.sep)[0];
+    const currentCat = categoryOf(relPath, ids);
     let finalPath;
     if (currentCat === TRASH) {
       const dir = path.join(rootDir(), TRASH);
-      const parsed = parseTrashName(path.basename(relPath), ids);
+      const parsed = parseTrashName(path.basename(relPath), topIds);
       const base = `${parsed.originalCategory}${TRASH_SEP}${sanitize(newTitle || "Untitled")}`;
       let target = path.join(dir, base + ".md");
       if (target !== oldFull && fssync.existsSync(target)) target = await uniquePath(dir, base, ".md");
@@ -772,8 +863,9 @@ app.whenReady().then(async () => {
       const newTitleOnDisk = path.basename(finalPath, ".md");
       await writeNote(rel, { title: newTitleOnDisk });
     } catch (e) { /* ignore */ }
-    const finalCat = path.relative(rootDir(), finalPath).split(path.sep)[0];
-    return { relPath: path.relative(rootDir(), finalPath), category: finalCat, title: path.basename(finalPath, ".md") };
+    const finalRel = path.relative(rootDir(), finalPath);
+    const finalCat = categoryOf(finalRel, ids);
+    return { relPath: finalRel, category: finalCat, title: path.basename(finalPath, ".md") };
   });
   ipcMain.handle("brain:trash", async (_e, relPath) => trashNote(relPath));
   ipcMain.handle("brain:restore", async (_e, relPath) => restoreNote(relPath));

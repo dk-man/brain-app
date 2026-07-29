@@ -230,7 +230,56 @@
       .nav-item.dragging { opacity: 0.4; }
       .nav-item.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
       .nav-item.drop-after  { box-shadow: inset 0 -2px 0 var(--accent); }
+      .nav-item.drop-into   { background: var(--selected); box-shadow: inset 0 0 0 1.5px var(--accent); }
       html[data-sidebar="collapsed"] .nav-item .drag-handle { display: none; }
+      .nav-item .chevron {
+        width: 12px; text-align: center; font-size: 9px; line-height: 1;
+        color: var(--text-muted); cursor: pointer; user-select: none;
+        transition: transform 0.15s;
+        display: inline-block;
+      }
+      .nav-item .chevron.spacer { visibility: hidden; }
+      .nav-item .add-sub {
+        margin-left: auto;
+        opacity: 0;
+        transition: opacity 0.15s;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 14px; line-height: 1;
+        padding: 0 6px;
+        border-radius: 4px;
+      }
+      .nav-item:hover .add-sub { opacity: 0.7; }
+      .nav-item .add-sub:hover { opacity: 1; background: var(--hover); color: var(--text); }
+      .nav-item:hover .count { display: none; }
+      .file-item.dragging { opacity: 0.4; }
+      .ctx-item.has-sub { position: relative; padding-right: 20px; }
+      .ctx-item.has-sub::after {
+        content: "▸"; position: absolute; right: 8px; top: 50%;
+        transform: translateY(-50%); font-size: 10px; color: var(--text-muted);
+      }
+      .ctx-sub {
+        position: fixed; z-index: 1001;
+        min-width: 180px; max-height: 320px; overflow-y: auto;
+        background: var(--menu-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: var(--menu-shadow);
+        padding: 4px;
+        font-size: 13px;
+      }
+      .ctx-sub .ctx-item.indent-1 { padding-left: 24px; }
+      .ctx-sub .ctx-item.indent-2 { padding-left: 40px; }
+      .ctx-sub .ctx-item.disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+      .subtree-toggle {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 11px; color: var(--text-muted);
+        cursor: pointer; user-select: none;
+        padding: 2px 8px; border-radius: 5px;
+        margin-right: 6px;
+      }
+      .subtree-toggle:hover { background: var(--hover); color: var(--text); }
+      .subtree-toggle input { margin: 0; }
       .panel-btn {
         display: flex;
         align-items: center;
@@ -1062,10 +1111,55 @@
       }
 
       function catById(id) { return categories.find(c => c.id === id); }
+      function catParent(id) { const i = id.lastIndexOf("/"); return i < 0 ? "" : id.slice(0, i); }
+      function catDepth(id) { return id ? id.split("/").length - 1 : 0; }
+      function catChildren(id) { return categories.filter(c => catParent(c.id) === id); }
+      function catBreadcrumb(id) {
+        const parts = id.split("/");
+        return parts.map((_, i) => catById(parts.slice(0, i + 1).join("/"))?.name || parts[i]).join(" / ");
+      }
+
+      const _expRaw = localStorage.getItem("brain.expandedCats");
+      let expandedCats = new Set(_expRaw ? JSON.parse(_expRaw) : []);
+      function saveExpanded() { localStorage.setItem("brain.expandedCats", JSON.stringify([...expandedCats])); }
+      function isCatVisible(id) {
+        let p = catParent(id);
+        while (p) { if (!expandedCats.has(p)) return false; p = catParent(p); }
+        return true;
+      }
+      let includeSubcats = localStorage.getItem("brain.includeSubcats") !== "false";
 
       function renderSidebar() {
         const nonTrash = notes.filter(n => n.category !== TRASH);
         const trashCount = notes.length - nonTrash.length;
+        const flat = categories.filter(c => isCatVisible(c.id));
+        const catRows = flat.map(c => {
+          const depth = catDepth(c.id);
+          const children = catChildren(c.id);
+          const hasChildren = children.length > 0;
+          const isOpen = expandedCats.has(c.id);
+          const directCount = nonTrash.filter(n => n.category === c.id).length;
+          const subCount = nonTrash.filter(n => n.category.startsWith(c.id + "/")).length;
+          const count = directCount + subCount;
+          const chev = hasChildren
+            ? `<span class="chevron" data-toggle="${escapeAttr(c.id)}" style="transform:${isOpen ? 'rotate(90deg)' : 'none'}">▸</span>`
+            : `<span class="chevron spacer">▸</span>`;
+          const canNest = depth < 2;
+          const addSub = canNest
+            ? `<span class="add-sub" data-add-sub="${escapeAttr(c.id)}" title="Add subcategory">+</span>`
+            : "";
+          return `
+            <div class="nav-item ${activeView === 'notes' && activeCategory === c.id ? 'active' : ''}"
+                 data-cat="${escapeAttr(c.id)}" data-cat-item="1"
+                 style="padding-left:${8 + depth * 14}px">
+              <span class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>
+              ${chev}
+              <span class="dot" style="background:${escapeAttr(c.color)}"></span>
+              <span>${escapeHtml(c.name)}</span>
+              ${addSub}
+              <span class="count">${count}</span>
+            </div>`;
+        }).join("");
         const html = `
           <div class="section-label">Library</div>
           <div class="nav-item ${activeView === 'notes' && activeCategory === 'all' ? 'active' : ''}" data-cat="all">
@@ -1081,16 +1175,7 @@
             <span>Categories</span>
             <span class="add" id="addCatBtn" title="New category">+</span>
           </div>
-          ${categories.map(c => {
-            const count = nonTrash.filter(n => n.category === c.id).length;
-            return `
-              <div class="nav-item ${activeView === 'notes' && activeCategory === c.id ? 'active' : ''}" data-cat="${escapeAttr(c.id)}" data-cat-item="1">
-                <span class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>
-                <span class="dot" style="background:${escapeAttr(c.color)}"></span>
-                <span>${escapeHtml(c.name)}</span>
-                <span class="count">${count}</span>
-              </div>`;
-          }).join("")}
+          ${catRows}
           <div class="section-label" style="margin-top:12px">Bin</div>
           <div class="nav-item ${activeView === 'notes' && activeCategory === TRASH ? 'active' : ''}" data-cat="${TRASH}">
             <span class="dot" style="background:#c7c7cc"></span>
@@ -1099,6 +1184,23 @@
           </div>
         `;
         $("sidebar").innerHTML = html;
+        $("sidebar").querySelectorAll(".chevron[data-toggle]").forEach(el => {
+          el.onclick = (e) => {
+            e.stopPropagation();
+            const id = el.dataset.toggle;
+            if (expandedCats.has(id)) expandedCats.delete(id); else expandedCats.add(id);
+            saveExpanded();
+            renderSidebar();
+          };
+        });
+        $("sidebar").querySelectorAll("[data-add-sub]").forEach(el => {
+          el.onclick = (e) => {
+            e.stopPropagation();
+            const parent = el.dataset.addSub;
+            expandedCats.add(parent); saveExpanded();
+            openNewCategoryModal(parent);
+          };
+        });
         $("sidebar").querySelectorAll(".nav-item").forEach(el => {
           el.onclick = async () => {
             await flushPending();
@@ -1113,20 +1215,21 @@
           };
         });
         wireCategoryReorder();
-        $("addCatBtn").onclick = (e) => { e.stopPropagation(); openNewCategoryModal(); };
+        wireNoteDropOnCats();
+        $("addCatBtn").onclick = (e) => { e.stopPropagation(); openNewCategoryModal(""); };
       }
 
       const CAT_DRAG_MIME = "application/x-brain-category";
+      const NOTE_DRAG_MIME = "application/x-brain-note";
       function clearCatDropMarkers() {
-        $("sidebar").querySelectorAll(".drop-before, .drop-after")
-          .forEach(x => x.classList.remove("drop-before", "drop-after"));
+        $("sidebar").querySelectorAll(".drop-before, .drop-after, .drop-into")
+          .forEach(x => x.classList.remove("drop-before", "drop-after", "drop-into"));
       }
       function wireCategoryReorder() {
         const items = $("sidebar").querySelectorAll('.nav-item[data-cat-item="1"]');
         items.forEach(el => {
           const handle = el.querySelector(".drag-handle");
           if (!handle) return;
-          // Only start a drag when the grip is grabbed — clicks on the row still navigate.
           handle.addEventListener("mousedown", () => { el.draggable = true; });
           handle.addEventListener("click", (e) => e.stopPropagation());
           el.addEventListener("mouseup", () => { el.draggable = false; });
@@ -1150,7 +1253,6 @@
             el.classList.add(before ? "drop-before" : "drop-after");
           });
           el.addEventListener("dragleave", (e) => {
-            // only clear if leaving the element (not entering a child)
             if (!el.contains(e.relatedTarget)) el.classList.remove("drop-before", "drop-after");
           });
           el.addEventListener("drop", async (e) => {
@@ -1178,26 +1280,95 @@
         });
       }
 
+      function wireNoteDropOnCats() {
+        const items = $("sidebar").querySelectorAll('.nav-item[data-cat-item="1"], .nav-item[data-cat="' + TRASH + '"]');
+        items.forEach(el => {
+          el.addEventListener("dragover", (e) => {
+            if (!e.dataTransfer.types.includes(NOTE_DRAG_MIME)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            el.classList.add("drop-into");
+          });
+          el.addEventListener("dragleave", (e) => {
+            if (!el.contains(e.relatedTarget)) el.classList.remove("drop-into");
+          });
+          el.addEventListener("drop", async (e) => {
+            if (!e.dataTransfer.types.includes(NOTE_DRAG_MIME)) return;
+            e.preventDefault();
+            el.classList.remove("drop-into");
+            const rel = e.dataTransfer.getData(NOTE_DRAG_MIME);
+            const dest = el.dataset.cat;
+            if (!rel || !dest) return;
+            if (dest === TRASH) { await trashNote(rel); return; }
+            await moveNoteToCategory(rel, dest);
+          });
+        });
+      }
+
+      async function moveNoteToCategory(relPath, destCat) {
+        const note = notes.find(n => n.relPath === relPath);
+        if (!note || note.category === destCat || note.category === TRASH) return;
+        await flushPending();
+        try {
+          const res = await api.rename({ relPath, newTitle: note.title, newCategory: destCat });
+          activeId = res.relPath;
+          activeCategory = destCat;
+          await refresh();
+        } catch (err) { console.error("move failed", err); }
+      }
+
+      function isCatOrDescendant(id, root) {
+        return id === root || id.startsWith(root + "/");
+      }
       function visibleNotes() {
         let list;
         if (activeCategory === "all") list = notes.filter(n => n.category !== TRASH);
+        else if (activeCategory === TRASH) list = notes.filter(n => n.category === TRASH);
+        else if (includeSubcats && catChildren(activeCategory).length) {
+          list = notes.filter(n => n.category !== TRASH && isCatOrDescendant(n.category, activeCategory));
+        }
         else list = notes.filter(n => n.category === activeCategory);
         return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
       }
 
       function renderList() {
         const list = visibleNotes();
-        $("listTitle").textContent = activeCategory === "all"
-          ? "All Notes"
-          : activeCategory === TRASH ? "Trash"
-          : (catById(activeCategory)?.name || activeCategory);
+        const titleEl = $("listTitle");
+        if (activeCategory === "all") titleEl.textContent = "All Notes";
+        else if (activeCategory === TRASH) titleEl.textContent = "Trash";
+        else titleEl.textContent = catBreadcrumb(activeCategory);
         $("newBtn").style.display = activeCategory === TRASH ? "none" : "";
+
+        // subtree toggle
+        const header = $("listTitle").parentElement;
+        let toggle = header.querySelector(".subtree-toggle");
+        const hasKids = activeCategory !== "all" && activeCategory !== TRASH && catChildren(activeCategory).length > 0;
+        if (hasKids) {
+          if (!toggle) {
+            toggle = document.createElement("label");
+            toggle.className = "subtree-toggle";
+            toggle.innerHTML = `<input type="checkbox" /> Include subcategories`;
+            header.insertBefore(toggle, $("newBtn"));
+            toggle.querySelector("input").onchange = (e) => {
+              includeSubcats = e.target.checked;
+              localStorage.setItem("brain.includeSubcats", String(includeSubcats));
+              renderList();
+            };
+          }
+          toggle.querySelector("input").checked = includeSubcats;
+          toggle.style.display = "";
+        } else if (toggle) {
+          toggle.style.display = "none";
+        }
+
         $("fileList").innerHTML = list.map(n => {
           const date = new Date(n.updatedAt);
           const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-          const meta = n.category === TRASH ? `from ${escapeHtml(n.originalCategory || "")}` : escapeHtml(catById(n.category)?.name || n.category);
+          const meta = n.category === TRASH
+            ? `from ${escapeHtml(n.originalCategory || "")}`
+            : escapeHtml(catBreadcrumb(n.category));
           return `
-            <div class="file-item ${n.relPath === activeId ? 'active' : ''}" data-id="${escapeAttr(n.relPath)}">
+            <div class="file-item ${n.relPath === activeId ? 'active' : ''}" data-id="${escapeAttr(n.relPath)}" draggable="${n.category !== TRASH}">
               <div class="file-name">${escapeHtml(n.title || "Untitled")}</div>
               <div class="file-meta"><span class="date">${dateStr}</span>${meta}</div>
             </div>`;
@@ -1212,10 +1383,18 @@
             render();
             showContextMenu(e.clientX, e.clientY, note);
           };
+          el.addEventListener("dragstart", (e) => {
+            const rel = el.dataset.id;
+            const note = notes.find(n => n.relPath === rel);
+            if (!note || note.category === TRASH) { e.preventDefault(); return; }
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData(NOTE_DRAG_MIME, rel);
+            el.classList.add("dragging");
+          });
+          el.addEventListener("dragend", () => el.classList.remove("dragging"));
         });
       }
 
-      // ---------- Paste: HTML -> Markdown ----------
       function handlePaste(e) {
         const cd = e.clipboardData;
         if (!cd) return;
@@ -2007,14 +2186,22 @@
       function hideContextMenu() {
         document.querySelectorAll(".ctx-menu").forEach(el => el.remove());
       }
+      let openSubMenu = null;
+      function hideSubMenu() { if (openSubMenu) { openSubMenu.remove(); openSubMenu = null; } }
       function showContextMenu(x, y, note) {
         hideContextMenu();
         const menu = document.createElement("div");
         menu.className = "ctx-menu";
-        const items = note.category === TRASH
-          ? [{ label: "Restore", action: () => restoreNote(note.relPath) }]
-          : [{ label: "Move to Trash", action: () => trashNote(note.relPath) }];
-        menu.innerHTML = items.map((it, i) => `<div class="ctx-item" data-i="${i}">${it.label}</div>`).join("");
+        const items = [];
+        if (note.category === TRASH) {
+          items.push({ label: "Restore", action: () => restoreNote(note.relPath) });
+        } else {
+          items.push({ label: "Move to…", submenu: true });
+          items.push({ label: "Move to Trash", action: () => trashNote(note.relPath) });
+        }
+        menu.innerHTML = items.map((it, i) =>
+          `<div class="ctx-item ${it.submenu ? 'has-sub' : ''}" data-i="${i}">${it.label}</div>`
+        ).join("");
         document.body.appendChild(menu);
         const rect = menu.getBoundingClientRect();
         const px = Math.min(x, window.innerWidth - rect.width - 8);
@@ -2022,22 +2209,61 @@
         menu.style.left = px + "px";
         menu.style.top = py + "px";
         menu.querySelectorAll(".ctx-item").forEach(el => {
-          el.onclick = () => { hideContextMenu(); items[+el.dataset.i].action(); };
+          const it = items[+el.dataset.i];
+          if (it.submenu) {
+            const open = () => {
+              hideSubMenu();
+              const r = el.getBoundingClientRect();
+              openSubMenu = buildMoveToSubmenu(note, r.right + 2, r.top);
+            };
+            el.onmouseenter = open;
+            el.onclick = (e) => { e.stopPropagation(); open(); };
+          } else {
+            el.onclick = () => { hideContextMenu(); it.action(); };
+          }
         });
       }
+      function buildMoveToSubmenu(note, x, y) {
+        const sub = document.createElement("div");
+        sub.className = "ctx-sub";
+        const rows = categories.map(c => {
+          const depth = catDepth(c.id);
+          const disabled = c.id === note.category;
+          return `<div class="ctx-item indent-${depth} ${disabled ? 'disabled' : ''}"
+                       data-dest="${escapeAttr(c.id)}">${escapeHtml(c.name)}</div>`;
+        }).join("");
+        sub.innerHTML = rows || `<div class="ctx-item disabled">No categories</div>`;
+        document.body.appendChild(sub);
+        const r = sub.getBoundingClientRect();
+        sub.style.left = Math.min(x, window.innerWidth - r.width - 8) + "px";
+        sub.style.top  = Math.min(y, window.innerHeight - r.height - 8) + "px";
+        sub.querySelectorAll("[data-dest]").forEach(el => {
+          if (el.classList.contains("disabled")) return;
+          el.onclick = async (e) => {
+            e.stopPropagation();
+            hideContextMenu();
+            await moveNoteToCategory(note.relPath, el.dataset.dest);
+          };
+        });
+        return sub;
+      }
+      const _origHide = hideContextMenu;
+      hideContextMenu = function() { hideSubMenu(); _origHide(); };
       document.addEventListener("click", hideContextMenu);
       document.addEventListener("contextmenu", (e) => {
         if (!e.target.closest(".file-item")) hideContextMenu();
       });
 
       // ---- New Category Modal ----
-      function openNewCategoryModal() {
+      function openNewCategoryModal(parent) {
+        parent = parent || "";
         const overlay = document.createElement("div");
         overlay.className = "modal-overlay";
         let selectedColor = PRESET_COLORS[0];
+        const title = parent ? `New Subcategory in “${escapeHtml(catBreadcrumb(parent))}”` : "New Category";
         overlay.innerHTML = `
           <div class="modal" role="dialog">
-            <h3>New Category</h3>
+            <h3>${title}</h3>
             <label>Name</label>
             <input type="text" id="catName" placeholder="e.g. Travel" maxlength="60" />
             <label>Color</label>
@@ -2072,8 +2298,9 @@
           if (!name) return;
           createBtn.disabled = true;
           try {
-            const cat = await api.addCategory(name, selectedColor);
+            const cat = await api.addCategory(name, selectedColor, parent);
             close();
+            if (parent) expandedCats.add(parent), saveExpanded();
             activeCategory = cat.id;
             activeId = null;
             await refresh();
@@ -2084,6 +2311,7 @@
         };
         setTimeout(() => nameInput.focus(), 0);
       }
+
 
       async function doExport() {
         await flushPending();
