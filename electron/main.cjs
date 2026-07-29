@@ -831,12 +831,13 @@ app.whenReady().then(async () => {
   ipcMain.handle("brain:rename", async (_e, { relPath, newTitle, newCategory }) => {
     const cats = await loadCategories();
     const ids = cats.map((c) => c.id);
+    const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
     const oldFull = safeJoin(relPath);
-    const currentCat = relPath.split(path.sep)[0];
+    const currentCat = categoryOf(relPath, ids);
     let finalPath;
     if (currentCat === TRASH) {
       const dir = path.join(rootDir(), TRASH);
-      const parsed = parseTrashName(path.basename(relPath), ids);
+      const parsed = parseTrashName(path.basename(relPath), topIds);
       const base = `${parsed.originalCategory}${TRASH_SEP}${sanitize(newTitle || "Untitled")}`;
       let target = path.join(dir, base + ".md");
       if (target !== oldFull && fssync.existsSync(target)) target = await uniquePath(dir, base, ".md");
@@ -862,8 +863,9 @@ app.whenReady().then(async () => {
       const newTitleOnDisk = path.basename(finalPath, ".md");
       await writeNote(rel, { title: newTitleOnDisk });
     } catch (e) { /* ignore */ }
-    const finalCat = path.relative(rootDir(), finalPath).split(path.sep)[0];
-    return { relPath: path.relative(rootDir(), finalPath), category: finalCat, title: path.basename(finalPath, ".md") };
+    const finalRel = path.relative(rootDir(), finalPath);
+    const finalCat = categoryOf(finalRel, ids);
+    return { relPath: finalRel, category: finalCat, title: path.basename(finalPath, ".md") };
   });
   ipcMain.handle("brain:trash", async (_e, relPath) => trashNote(relPath));
   ipcMain.handle("brain:restore", async (_e, relPath) => restoreNote(relPath));
