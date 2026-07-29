@@ -497,11 +497,17 @@ async function trashNote(relPath) {
   const ids = cats.map((c) => c.id);
   const root = rootDir();
   const oldFull = safeJoin(relPath);
-  const parts = relPath.split(path.sep);
-  const cat = parts[0];
+  const cat = categoryOf(relPath, ids);
   if (cat === TRASH) return { relPath };
-  const filename = parts.slice(1).join(path.sep).replace(/\.md$/, "");
-  const newBase = `${ids.includes(cat) ? cat : (ids[0] || "Work")}${TRASH_SEP}${filename}`;
+  const filename = path.basename(relPath, ".md");
+  // Persist full nested category path in frontmatter so restore is exact
+  try {
+    await writeNote(relPath, { originalCategory: cat, bumpModified: false });
+  } catch {}
+  const topCat = cat.split("/")[0];
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
+  const legacyPrefix = topIds.includes(topCat) ? topCat : (topIds[0] || "Work");
+  const newBase = `${legacyPrefix}${TRASH_SEP}${filename}`;
   const trashDir = path.join(root, TRASH);
   await fs.mkdir(trashDir, { recursive: true });
   const target = await uniquePath(trashDir, newBase, ".md");
@@ -516,13 +522,28 @@ async function restoreNote(relPath) {
   const oldFull = safeJoin(relPath);
   const parts = relPath.split(path.sep);
   if (parts[0] !== TRASH) return { relPath };
-  const parsed = parseTrashName(parts[parts.length - 1], ids);
-  const cat = ids.includes(parsed.originalCategory) ? parsed.originalCategory : (ids[0] || "Work");
+  // Prefer frontmatter for exact nested restore
+  let title = null, origCat = null;
+  try {
+    const raw = await fs.readFile(oldFull, "utf8");
+    const p = parseFrontmatter(raw);
+    if (p.fm?.originalCategory) origCat = String(p.fm.originalCategory);
+    if (p.fm?.title) title = String(p.fm.title);
+  } catch {}
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
+  const parsed = parseTrashName(parts[parts.length - 1], topIds);
+  if (!title) title = parsed.title;
+  if (!origCat) origCat = parsed.originalCategory;
+  let cat = ids.includes(origCat) ? origCat : null;
+  if (!cat) cat = ids.find((x) => x === (origCat || "").split("/")[0]) || ids[0] || "Work";
   const dir = path.join(root, cat);
   await fs.mkdir(dir, { recursive: true });
-  const target = await uniquePath(dir, sanitize(parsed.title), ".md");
+  const target = await uniquePath(dir, sanitize(title), ".md");
   await renameTracked(oldFull, target);
-  return { relPath: path.relative(root, target) };
+  // Clear originalCategory from frontmatter now that it's restored
+  const newRel = path.relative(root, target);
+  try { await writeNote(newRel, { originalCategory: null, bumpModified: false }); } catch {}
+  return { relPath: newRel };
 }
 
 async function exportAll() {
