@@ -43,23 +43,58 @@ function sanitize(name) {
     .slice(0, 120) || "Untitled";
 }
 
-function sanitizeCategoryId(name) {
+function sanitizeSegment(name) {
   return String(name || "")
     .replace(/[\\/:*?"<>|.]/g, "-")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 60);
 }
+// Back-compat alias — legacy single-segment sanitizer
+const sanitizeCategoryId = sanitizeSegment;
+
+const MAX_CAT_DEPTH = 3;
+function sanitizeCategoryPath(pathStr) {
+  return String(pathStr || "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .map(sanitizeSegment)
+    .filter(Boolean)
+    .slice(0, MAX_CAT_DEPTH)
+    .join("/");
+}
+
+// Given a note relPath, return the deepest matching category id.
+function categoryOf(relPath, categoryIds) {
+  const parts = String(relPath || "").split(path.sep);
+  if (!parts.length) return "";
+  if (parts[0] === TRASH) return TRASH;
+  for (let n = Math.min(parts.length - 1, MAX_CAT_DEPTH); n >= 1; n--) {
+    const candidate = parts.slice(0, n).join("/");
+    if (categoryIds.includes(candidate)) return candidate;
+  }
+  return parts[0];
+}
 
 async function listCategoryDirsOnDisk() {
-  try {
-    const entries = await fs.readdir(rootDir(), { withFileTypes: true });
-    return entries
-      .filter((e) => e.isDirectory() && e.name !== TRASH && !e.name.startsWith("."))
-      .map((e) => e.name);
-  } catch {
-    return [];
+  const root = rootDir();
+  const out = [];
+  async function walk(rel, depth) {
+    if (depth > MAX_CAT_DEPTH) return;
+    const full = rel ? path.join(root, rel) : root;
+    let entries;
+    try { entries = await fs.readdir(full, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith(".")) continue;
+      if (!rel && e.name === TRASH) continue;
+      const childRel = rel ? `${rel}/${e.name}` : e.name;
+      out.push(childRel);
+      await walk(childRel, depth + 1);
+    }
   }
+  await walk("", 1);
+  return out;
 }
 
 async function loadCategories() {
