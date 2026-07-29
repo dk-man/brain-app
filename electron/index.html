@@ -1513,12 +1513,13 @@
         let schedHtml = "";
         if (sched) {
           const label = formatSchedLabel(sched);
-          schedHtml = `<span class="sched-chip" id="schedChip" title="Scheduled ${escapeAttr(sched)} — click to change"><span class="glyph">◷</span>${escapeHtml(label)}${readOnly ? "" : '<span class="x" id="schedRemove" title="Clear scheduled date">×</span>'}</span>`;
+          if (readOnly) {
+            schedHtml = `<span class="sched-chip" title="Scheduled ${escapeAttr(sched)}"><span class="glyph">◷</span>${escapeHtml(label)}</span>`;
+          } else {
+            schedHtml = `<button type="button" class="sched-chip" id="schedChip" title="Scheduled ${escapeAttr(sched)} — click to change"><span class="glyph">◷</span>${escapeHtml(label)}<span class="x" id="schedRemove" title="Clear scheduled date">×</span></button>`;
+          }
         } else if (!readOnly) {
-          schedHtml = `<button class="sched-btn" id="schedBtn" title="Schedule this note"><span class="glyph">◷</span>schedule</button>`;
-        }
-        if (!readOnly) {
-          schedHtml += `<input type="date" id="schedInput" class="sched-hidden-input" aria-label="Pick a scheduled date" tabindex="-1" />`;
+          schedHtml = `<button type="button" class="sched-btn" id="schedBtn" title="Schedule this note"><span class="glyph">◷</span>schedule</button>`;
         }
         const modified = note.frontmatter?.modified || new Date(note.updatedAt).toISOString();
         bar.innerHTML = chips + addBtn + schedHtml + `<span class="modified-text">${escapeHtml(relativeTime(modified))}</span>`;
@@ -1536,37 +1537,61 @@
         });
         const addBtnEl = $("addTagBtn");
         if (addBtnEl) addBtnEl.onclick = () => startAddTag(note, readOnly);
-        const schedInput = $("schedInput");
-        const openPicker = () => {
-          if (!schedInput) return;
-          schedInput.value = sched || "";
-          if (typeof schedInput.showPicker === "function") {
-            try { schedInput.showPicker(); return; } catch {}
-          }
-          schedInput.focus();
-          schedInput.click();
+        const closeSchedulePopover = () => document.querySelector(".schedule-popover")?.remove();
+        const setScheduledDate = (v) => {
+          if (!v) return;
+          note.frontmatter = note.frontmatter || {};
+          note.frontmatter.scheduled = v;
+          closeSchedulePopover();
+          renderMetaBar(note, readOnly);
+          queueSave({ scheduled: v });
         };
-        if (schedInput) {
-          schedInput.onchange = (e) => {
-            const v = e.target.value;
-            if (!v) return;
-            note.frontmatter = note.frontmatter || {};
-            note.frontmatter.scheduled = v;
-            renderMetaBar(note, readOnly);
-            queueSave({ scheduled: v });
+        const openPicker = (anchor) => {
+          if (!anchor) return;
+          closeSchedulePopover();
+          const pop = document.createElement("div");
+          pop.className = "schedule-popover";
+          pop.innerHTML = `<input type="date" aria-label="Pick a scheduled date" value="${escapeAttr(sched || "")}" /><button type="button">Done</button>${sched ? '<button type="button" class="clear">Clear</button>' : ''}`;
+          document.body.appendChild(pop);
+          const rect = anchor.getBoundingClientRect();
+          const popRect = pop.getBoundingClientRect();
+          pop.style.left = `${Math.min(window.innerWidth - popRect.width - 12, Math.max(12, rect.left))}px`;
+          pop.style.top = `${Math.min(window.innerHeight - popRect.height - 12, rect.bottom + 6)}px`;
+          const input = pop.querySelector("input");
+          const done = pop.querySelector("button:not(.clear)");
+          const clear = pop.querySelector(".clear");
+          const onOutside = (event) => {
+            if (!pop.contains(event.target) && event.target !== anchor) {
+              closeSchedulePopover();
+              document.removeEventListener("mousedown", onOutside);
+            }
           };
-        }
+          setTimeout(() => document.addEventListener("mousedown", onOutside), 0);
+          input.focus();
+          if (typeof input.showPicker === "function") {
+            try { input.showPicker(); } catch {}
+          }
+          input.onchange = () => setScheduledDate(input.value);
+          done.onclick = () => setScheduledDate(input.value);
+          if (clear) clear.onclick = () => {
+            note.frontmatter.scheduled = null;
+            closeSchedulePopover();
+            renderMetaBar(note, readOnly);
+            queueSave({ scheduled: null });
+          };
+        };
         const schedBtn = $("schedBtn");
-        if (schedBtn) schedBtn.onclick = (e) => { e.preventDefault(); openPicker(); };
+        if (schedBtn) schedBtn.onclick = (e) => { e.preventDefault(); openPicker(schedBtn); };
         const schedChip = $("schedChip");
         if (schedChip) schedChip.onclick = (e) => {
           if (e.target.closest("#schedRemove")) return;
-          openPicker();
+          openPicker(schedChip);
         };
         const rm = $("schedRemove");
         if (rm) rm.onclick = (e) => {
           e.stopPropagation();
           note.frontmatter.scheduled = null;
+          closeSchedulePopover();
           renderMetaBar(note, readOnly);
           queueSave({ scheduled: null });
         };
