@@ -586,26 +586,29 @@ async function importAll() {
   if (Array.isArray(data.categories)) {
     for (const c of data.categories) {
       if (!c?.id) continue;
-      const safeId = sanitizeCategoryId(c.id);
+      const safeId = sanitizeCategoryPath(c.id);
       if (!safeId || safeId === TRASH) continue;
       if (!cats.find((x) => x.id.toLowerCase() === safeId.toLowerCase())) {
-        cats.push({ id: safeId, name: c.name || safeId, color: c.color || "#8e8e93" });
+        const leaf = safeId.split("/").pop();
+        cats.push({ id: safeId, name: c.name || leaf, color: c.color || "#8e8e93" });
       }
     }
     await saveCategories(cats);
   }
   await ensureDirs();
   const ids = cats.map((c) => c.id);
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
   let imported = 0;
   for (const n of data.notes) {
-    const rawCat = n.category === TRASH ? TRASH : sanitizeCategoryId(n.category || "");
+    const rawCat = n.category === TRASH ? TRASH : sanitizeCategoryPath(n.category || "");
     const cat = rawCat === TRASH ? TRASH : (ids.includes(rawCat) ? rawCat : (ids[0] || "Work"));
     const dir = safeJoin(cat);
     await fs.mkdir(dir, { recursive: true });
     const baseTitle = sanitize(n.title || "Untitled");
-    const safeOrig = sanitizeCategoryId(n.originalCategory || "");
+    const safeOrig = sanitizeCategoryPath(n.originalCategory || "");
+    const legacyPrefix = safeOrig ? safeOrig.split("/")[0] : "";
     const base = cat === TRASH
-      ? `${safeOrig && ids.includes(safeOrig) ? safeOrig : (ids[0] || "Work")}${TRASH_SEP}${baseTitle}`
+      ? `${legacyPrefix && topIds.includes(legacyPrefix) ? legacyPrefix : (topIds[0] || "Work")}${TRASH_SEP}${baseTitle}`
       : baseTitle;
     const target = await uniquePath(dir, base, ".md");
     await writeFileTracked(target, n.body || "");
