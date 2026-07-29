@@ -1407,11 +1407,12 @@
         pane.style.flex = "1";
         pane.style.minHeight = "0";
         const readOnly = note.category === TRASH;
+        const savedMode = (localStorage.getItem("brain.editorMode") === "preview") ? "preview" : "edit";
         pane.innerHTML = `
           <div class="meta-bar" id="metaBar"></div>
           <div class="preview-toggle" id="previewToggle" role="tablist">
-            <button type="button" data-mode="edit" class="active" title="Edit (⌘⇧R to toggle)">Edit</button>
-            <button type="button" data-mode="preview" title="Read (⌘⇧R to toggle)">Read</button>
+            <button type="button" data-mode="edit" class="${savedMode === "edit" ? "active" : ""}" title="Edit (⌘⇧R to toggle)">Edit</button>
+            <button type="button" data-mode="preview" class="${savedMode === "preview" ? "active" : ""}" title="Read (⌘⇧R to toggle)">Read</button>
           </div>
           <input class="title-input" id="titleInput" value="${escapeAttr(note.title)}" placeholder="Title" spellcheck="true" ${readOnly ? "readonly" : ""} />
           <div class="body-input" id="bodyInput" data-placeholder="Start writing…" ${readOnly ? "" : 'contenteditable="true"'} spellcheck="true"></div>
@@ -1466,11 +1467,14 @@
           previewToggle.querySelectorAll("button").forEach(b =>
             b.classList.toggle("active", b.dataset.mode === mode)
           );
+          try { localStorage.setItem("brain.editorMode", mode); } catch (_) {}
         };
         previewToggle.addEventListener("click", (e) => {
           const b = e.target.closest("button[data-mode]");
           if (b) setEditorMode(b.dataset.mode);
         });
+        // Apply persisted mode on initial render
+        if (savedMode === "preview") setEditorMode("preview");
         // ⌘⇧R (or Ctrl⇧R) toggles Read mode
         const togglePreviewKey = (e) => {
           if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "r" || e.key === "R")) {
