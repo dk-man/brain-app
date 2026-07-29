@@ -2186,14 +2186,22 @@
       function hideContextMenu() {
         document.querySelectorAll(".ctx-menu").forEach(el => el.remove());
       }
+      let openSubMenu = null;
+      function hideSubMenu() { if (openSubMenu) { openSubMenu.remove(); openSubMenu = null; } }
       function showContextMenu(x, y, note) {
         hideContextMenu();
         const menu = document.createElement("div");
         menu.className = "ctx-menu";
-        const items = note.category === TRASH
-          ? [{ label: "Restore", action: () => restoreNote(note.relPath) }]
-          : [{ label: "Move to Trash", action: () => trashNote(note.relPath) }];
-        menu.innerHTML = items.map((it, i) => `<div class="ctx-item" data-i="${i}">${it.label}</div>`).join("");
+        const items = [];
+        if (note.category === TRASH) {
+          items.push({ label: "Restore", action: () => restoreNote(note.relPath) });
+        } else {
+          items.push({ label: "Move to…", submenu: true });
+          items.push({ label: "Move to Trash", action: () => trashNote(note.relPath) });
+        }
+        menu.innerHTML = items.map((it, i) =>
+          `<div class="ctx-item ${it.submenu ? 'has-sub' : ''}" data-i="${i}">${it.label}</div>`
+        ).join("");
         document.body.appendChild(menu);
         const rect = menu.getBoundingClientRect();
         const px = Math.min(x, window.innerWidth - rect.width - 8);
@@ -2201,22 +2209,61 @@
         menu.style.left = px + "px";
         menu.style.top = py + "px";
         menu.querySelectorAll(".ctx-item").forEach(el => {
-          el.onclick = () => { hideContextMenu(); items[+el.dataset.i].action(); };
+          const it = items[+el.dataset.i];
+          if (it.submenu) {
+            const open = () => {
+              hideSubMenu();
+              const r = el.getBoundingClientRect();
+              openSubMenu = buildMoveToSubmenu(note, r.right + 2, r.top);
+            };
+            el.onmouseenter = open;
+            el.onclick = (e) => { e.stopPropagation(); open(); };
+          } else {
+            el.onclick = () => { hideContextMenu(); it.action(); };
+          }
         });
       }
+      function buildMoveToSubmenu(note, x, y) {
+        const sub = document.createElement("div");
+        sub.className = "ctx-sub";
+        const rows = categories.map(c => {
+          const depth = catDepth(c.id);
+          const disabled = c.id === note.category;
+          return `<div class="ctx-item indent-${depth} ${disabled ? 'disabled' : ''}"
+                       data-dest="${escapeAttr(c.id)}">${escapeHtml(c.name)}</div>`;
+        }).join("");
+        sub.innerHTML = rows || `<div class="ctx-item disabled">No categories</div>`;
+        document.body.appendChild(sub);
+        const r = sub.getBoundingClientRect();
+        sub.style.left = Math.min(x, window.innerWidth - r.width - 8) + "px";
+        sub.style.top  = Math.min(y, window.innerHeight - r.height - 8) + "px";
+        sub.querySelectorAll("[data-dest]").forEach(el => {
+          if (el.classList.contains("disabled")) return;
+          el.onclick = async (e) => {
+            e.stopPropagation();
+            hideContextMenu();
+            await moveNoteToCategory(note.relPath, el.dataset.dest);
+          };
+        });
+        return sub;
+      }
+      const _origHide = hideContextMenu;
+      hideContextMenu = function() { hideSubMenu(); _origHide(); };
       document.addEventListener("click", hideContextMenu);
       document.addEventListener("contextmenu", (e) => {
         if (!e.target.closest(".file-item")) hideContextMenu();
       });
 
       // ---- New Category Modal ----
-      function openNewCategoryModal() {
+      function openNewCategoryModal(parent) {
+        parent = parent || "";
         const overlay = document.createElement("div");
         overlay.className = "modal-overlay";
         let selectedColor = PRESET_COLORS[0];
+        const title = parent ? `New Subcategory in “${escapeHtml(catBreadcrumb(parent))}”` : "New Category";
         overlay.innerHTML = `
           <div class="modal" role="dialog">
-            <h3>New Category</h3>
+            <h3>${title}</h3>
             <label>Name</label>
             <input type="text" id="catName" placeholder="e.g. Travel" maxlength="60" />
             <label>Color</label>
@@ -2251,8 +2298,9 @@
           if (!name) return;
           createBtn.disabled = true;
           try {
-            const cat = await api.addCategory(name, selectedColor);
+            const cat = await api.addCategory(name, selectedColor, parent);
             close();
+            if (parent) expandedCats.add(parent), saveExpanded();
             activeCategory = cat.id;
             activeId = null;
             await refresh();
@@ -2263,6 +2311,7 @@
         };
         setTimeout(() => nameInput.focus(), 0);
       }
+
 
       async function doExport() {
         await flushPending();
