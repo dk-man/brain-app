@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import brainScreenshot from "../assets/Brain_v0.3.png.asset.json";
+import brainScreenshot from "../assets/Brain_v0.4.png.asset.json";
 
 const GITHUB_URL = "https://github.com/dk-man/brain-app";
 const RELEASES_URL = "https://github.com/dk-man/brain-app/releases/latest";
