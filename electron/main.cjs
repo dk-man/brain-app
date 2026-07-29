@@ -338,7 +338,8 @@ async function ensureFrontmatter(relPath) {
   let title;
   if (isTrash) {
     const cats = await loadCategories();
-    title = parseTrashName(path.basename(relPath), cats.map((c) => c.id)).title;
+    const topIds = Array.from(new Set(cats.map((c) => c.id.split("/")[0])));
+    title = parseTrashName(path.basename(relPath), topIds).title;
   } else {
     title = path.basename(relPath, ".md");
   }
@@ -352,6 +353,7 @@ async function ensureFrontmatter(relPath) {
   };
   const passSched = normScheduled(parsed.fm?.scheduled);
   if (passSched) merged.scheduled = passSched;
+  if (parsed.fm?.originalCategory) merged.originalCategory = String(parsed.fm.originalCategory);
   const body = parsed.fm ? parsed.body : raw;
   const newRaw = serializeFrontmatter(merged) + body;
   await writeFileTracked(full, newRaw);
@@ -360,7 +362,7 @@ async function ensureFrontmatter(relPath) {
   return { frontmatter: merged, body, injected: true };
 }
 
-async function writeNote(relPath, { body, title, tags, scheduled, bumpModified = true }) {
+async function writeNote(relPath, { body, title, tags, scheduled, originalCategory, bumpModified = true }) {
   const full = safeJoin(relPath);
   let existing = { fm: null, body: "" };
   try {
@@ -380,6 +382,12 @@ async function writeNote(relPath, { body, title, tags, scheduled, bumpModified =
   else if (scheduled === null || scheduled === "") nextSched = null;
   else nextSched = normScheduled(scheduled);
   if (nextSched) merged.scheduled = nextSched;
+  // originalCategory: undefined = keep existing; null/"" = clear; string = set
+  let nextOrig;
+  if (originalCategory === undefined) nextOrig = existing.fm?.originalCategory ? String(existing.fm.originalCategory) : null;
+  else if (originalCategory === null || originalCategory === "") nextOrig = null;
+  else nextOrig = String(originalCategory);
+  if (nextOrig) merged.originalCategory = nextOrig;
   const newBody = body !== undefined ? body : existing.body;
   const raw = serializeFrontmatter(merged) + newBody;
   await writeFileTracked(full, raw);
@@ -389,26 +397,40 @@ async function writeNote(relPath, { body, title, tags, scheduled, bumpModified =
 async function listAll() {
   const cats = await ensureDirs();
   const ids = cats.map((c) => c.id);
-  const allFolders = [...ids, TRASH];
+  const topIds = Array.from(new Set(ids.map((i) => i.split("/")[0])));
   const root = rootDir();
   const entries = [];
-  const dirs = await fs.readdir(root, { withFileTypes: true });
-  for (const c of dirs) {
-    if (!c.isDirectory()) continue;
-    if (!allFolders.includes(c.name)) continue;
-    const catDir = path.join(root, c.name);
-    const files = await fs.readdir(catDir, { withFileTypes: true });
+  const folders = [...ids.map((id) => ({ folder: id, isTrash: false })), { folder: TRASH, isTrash: true }];
+  for (const spec of folders) {
+    const catDir = path.join(root, spec.folder);
+    let files;
+    try { files = await fs.readdir(catDir, { withFileTypes: true }); } catch { continue; }
     for (const f of files) {
       if (!f.isFile() || !f.name.endsWith(".md")) continue;
       const full = path.join(catDir, f.name);
       const stat = await fs.stat(full);
-      const isTrash = c.name === TRASH;
-      const parsed = isTrash ? parseTrashName(f.name, ids) : null;
+      let title, origCat = null;
+      if (spec.isTrash) {
+        // Prefer frontmatter, fall back to filename convention
+        try {
+          const raw = await fs.readFile(full, "utf8");
+          const p = parseFrontmatter(raw);
+          if (p.fm?.originalCategory) origCat = String(p.fm.originalCategory);
+          if (p.fm?.title) title = String(p.fm.title);
+        } catch {}
+        if (!title || !origCat) {
+          const parsed = parseTrashName(f.name, topIds);
+          if (!title) title = parsed.title;
+          if (!origCat) origCat = parsed.originalCategory;
+        }
+      } else {
+        title = f.name.replace(/\.md$/, "");
+      }
       entries.push({
-        relPath: path.join(c.name, f.name),
-        category: c.name,
-        title: isTrash ? parsed.title : f.name.replace(/\.md$/, ""),
-        originalCategory: isTrash ? parsed.originalCategory : null,
+        relPath: path.join(spec.folder, f.name),
+        category: spec.folder,
+        title,
+        originalCategory: spec.isTrash ? origCat : null,
         updatedAt: stat.mtimeMs,
       });
     }
