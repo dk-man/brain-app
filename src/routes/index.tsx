@@ -4,7 +4,7 @@ import brainScreenshot from "../assets/Brain_v0.3.png.asset.json";
 const GITHUB_URL = "https://github.com/dk-man/brain-app";
 const RELEASES_URL = "https://github.com/dk-man/brain-app/releases/latest";
 const DOWNLOAD_URL =
-  "https://github.com/dk-man/brain-app/releases/download/v0.3.0/Brain-darwin-arm64.zip";
+  "https://github.com/dk-man/brain-app/releases/download/v0.4.0/Brain-darwin-arm64.zip";
 const BASE_URL = "https://alexlabs.dev";
 
 export const Route = createFileRoute("/")({
@@ -80,7 +80,7 @@ function Landing() {
             </a>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            v0.3.0 · Apple Silicon · unsigned build ·{" "}
+            v0.4.0 · Apple Silicon · unsigned build ·{" "}
             <a
               href={RELEASES_URL}
               className="underline-offset-4 hover:text-foreground hover:underline"
@@ -100,7 +100,7 @@ function Landing() {
             height={900}
           />
           <p className="mt-3 text-center text-xs text-muted-foreground">
-            Brain 0.3.0 — local Markdown notes, categories, wikilinks, and a dedicated Inbox.
+            Brain 0.4.0 — local Markdown notes, nested categories, calendar, wikilinks, and Inbox.
           </p>
         </section>
 
@@ -237,7 +237,7 @@ function Landing() {
         </section>
 
         <section className="mt-20 rounded-lg border border-border bg-muted/30 p-6">
-          <h2 className="text-xl font-semibold tracking-tight">Download Brain 0.3.0</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Download Brain 0.4.0</h2>
           <p className="mt-2 text-muted-foreground">Apple Silicon · macOS · unsigned build</p>
           <div className="mt-5 flex flex-wrap gap-3">
             <a
