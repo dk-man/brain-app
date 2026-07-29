@@ -165,17 +165,26 @@ async function ensureDirs() {
   return cats;
 }
 
-async function addCategory({ name, color }) {
+async function addCategory({ name, color, parent }) {
   const cats = await loadCategories();
-  const baseId = sanitizeCategoryId(name);
-  if (!baseId) throw new Error("Invalid category name");
-  if (baseId === TRASH) throw new Error("Reserved name");
+  const seg = sanitizeSegment(name);
+  if (!seg) throw new Error("Invalid category name");
+  if (seg === TRASH) throw new Error("Reserved name");
+  let parentPath = "";
+  if (parent) {
+    parentPath = sanitizeCategoryPath(parent);
+    if (!cats.find((c) => c.id === parentPath)) throw new Error("Parent category not found");
+  }
+  const depth = parentPath ? parentPath.split("/").length : 0;
+  if (depth >= MAX_CAT_DEPTH) throw new Error(`Max nesting depth is ${MAX_CAT_DEPTH}`);
+  const baseId = parentPath ? `${parentPath}/${seg}` : seg;
   let id = baseId;
   let i = 2;
   while (cats.find((c) => c.id.toLowerCase() === id.toLowerCase())) {
     id = `${baseId} ${i++}`;
   }
-  const cat = { id, name: id, color: color || "#8e8e93" };
+  const leaf = id.split("/").pop();
+  const cat = { id, name: leaf, color: color || "#8e8e93" };
   cats.push(cat);
   await saveCategories(cats);
   await fs.mkdir(path.join(rootDir(), id), { recursive: true });
