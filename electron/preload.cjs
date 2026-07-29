@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("brainAPI", {
   list: () => ipcRenderer.invoke("brain:list"),
   categories: () => ipcRenderer.invoke("brain:categories"),
-  addCategory: (name, color) => ipcRenderer.invoke("brain:addCategory", { name, color }),
+  addCategory: (name, color, parent) => ipcRenderer.invoke("brain:addCategory", { name, color, parent }),
   reorderCategories: (orderedIds) => ipcRenderer.invoke("brain:reorderCategories", orderedIds),
   read: (relPath) => ipcRenderer.invoke("brain:read", relPath),
   readNote: (relPath) => ipcRenderer.invoke("brain:readNote", relPath),
