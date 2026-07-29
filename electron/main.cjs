@@ -122,7 +122,7 @@ async function loadCategories() {
   const extras = diskDirs
     .filter((d) => !knownIds.has(d))
     .sort((a, b) => a.localeCompare(b))
-    .map((d) => ({ id: d, name: d, color: "#8e8e93" }));
+    .map((d) => ({ id: d, name: d.split("/").pop(), color: "#8e8e93" }));
   const final = [...kept, ...extras];
   const changed =
     final.length !== stored.length ||
