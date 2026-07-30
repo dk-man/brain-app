@@ -1648,6 +1648,8 @@
           );
           try { localStorage.setItem("brain.editorMode", mode); } catch (_) {}
         };
+        window.__toggleEditorMode = () => setEditorMode(previewPane.style.display !== "none" ? "edit" : "preview");
+
         previewToggle.addEventListener("click", (e) => {
           const b = e.target.closest("button[data-mode]");
           if (b) setEditorMode(b.dataset.mode);
