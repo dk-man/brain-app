@@ -1045,6 +1045,8 @@ app.whenReady().then(async () => {
   });
 
   await ensureInboxCategory();
+  buildAppMenu();
+
   createWindow();
   startWatcher();
   createCaptureWindow();
