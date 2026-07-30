@@ -26,4 +26,10 @@ contextBridge.exposeInMainWorld("brainAPI", {
     ipcRenderer.on("brain:changed", handler);
     return () => ipcRenderer.removeListener("brain:changed", handler);
   },
+  onMenu: (cb) => {
+    const handler = (_e, action) => cb(action);
+    ipcRenderer.on("brain:menu", handler);
+    return () => ipcRenderer.removeListener("brain:menu", handler);
+  },
 });
+
