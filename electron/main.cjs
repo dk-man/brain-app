@@ -8,8 +8,20 @@ const TRASH_SEP = "__";
 const CATEGORIES_FILE = ".categories.json";
 const INBOX = "Inbox";
 
+// App identity / links
+const APP_NAME = "Brain";
+const AUTHOR_NAME = "Alex Tereshchenko";
+const AUTHOR_EMAIL = "alex.tereshchenko@gmail.com";
+const SITE_URL = "https://alexlabs.dev/";
+const REPO_URL = "https://github.com/dk-man/brain-app";
+const RELEASES_URL = "https://github.com/dk-man/brain-app/releases";
+const ISSUES_URL = "https://github.com/dk-man/brain-app/issues";
+
+app.setName(APP_NAME);
+
 // Quick-capture global hotkey. Change here to rebind.
 const QUICK_CAPTURE_HOTKEY = "CommandOrControl+Shift+N";
+
 
 const DEFAULT_CATEGORIES = [
   { id: "Work", name: "Work", color: "#0071e3" },
@@ -721,7 +733,135 @@ function showCaptureWindow() {
   else notify();
 }
 
+function sendToMain(action) {
+  const win = BrowserWindow.getAllWindows().find((w) => w !== captureWin && !w.isDestroyed());
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  win.webContents.send("brain:menu", action);
+}
+
+function openExternalSafe(url) {
+  if (/^(https?|mailto):/i.test(url)) shell.openExternal(url);
+}
+
+function buildAppMenu() {
+  const isMac = process.platform === "darwin";
+  const version = app.getVersion();
+
+  app.setAboutPanelOptions({
+    applicationName: APP_NAME,
+    applicationVersion: version,
+    version: "",
+    copyright: `© ${new Date().getFullYear()} ${AUTHOR_NAME}\n${SITE_URL}\n${AUTHOR_EMAIL}`,
+    credits: "Local-first Markdown notes. Your notes are plain .md files on your disk.",
+    website: SITE_URL,
+  });
+
+  const template = [
+    ...(isMac
+      ? [{
+          label: APP_NAME,
+          submenu: [
+            { label: `About ${APP_NAME}`, role: "about" },
+            { type: "separator" },
+            { label: "Check for Updates…", click: () => openExternalSafe(RELEASES_URL) },
+            { type: "separator" },
+            { label: "Reveal Vault in Finder", accelerator: "CmdOrCtrl+Shift+O", click: () => shell.openPath(rootDir()) },
+            { type: "separator" },
+            { role: "services" },
+            { type: "separator" },
+            { role: "hide", label: `Hide ${APP_NAME}` },
+            { role: "hideOthers" },
+            { role: "unhide" },
+            { type: "separator" },
+            { role: "quit", label: `Quit ${APP_NAME}` },
+          ],
+        }]
+      : []),
+    {
+      label: "File",
+      submenu: [
+        { label: "New Note", accelerator: "CmdOrCtrl+N", click: () => sendToMain("new-note") },
+        { label: "Quick Capture…", accelerator: QUICK_CAPTURE_HOTKEY, click: () => showCaptureWindow() },
+        { label: "New Category…", click: () => sendToMain("new-category") },
+        { type: "separator" },
+        { label: "Move Note to Trash", accelerator: "CmdOrCtrl+Backspace", click: () => sendToMain("trash-note") },
+        { type: "separator" },
+        { label: "Export Vault…", accelerator: "CmdOrCtrl+Shift+E", click: () => sendToMain("export") },
+        { label: "Import Vault…", click: () => sendToMain("import") },
+        { label: "Reveal Note in Finder", click: () => sendToMain("reveal-note") },
+        { type: "separator" },
+        isMac ? { role: "close" } : { role: "quit" },
+      ],
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "pasteAndMatchStyle" },
+        { role: "selectAll" },
+        { type: "separator" },
+        { label: "Find in Notes…", accelerator: "CmdOrCtrl+K", click: () => sendToMain("search") },
+        { label: "Rename Note", accelerator: "CmdOrCtrl+Shift+T", click: () => sendToMain("rename-note") },
+        ...(isMac
+          ? [{ label: "Speech", submenu: [{ role: "startSpeaking" }, { role: "stopSpeaking" }] }]
+          : []),
+      ],
+    },
+    {
+      label: "View",
+      submenu: [
+        { label: "Notes", accelerator: "CmdOrCtrl+1", click: () => sendToMain("view-notes") },
+        { label: "Calendar", accelerator: "CmdOrCtrl+2", click: () => sendToMain("view-calendar") },
+        { type: "separator" },
+        { label: "Toggle Edit / Read", accelerator: "CmdOrCtrl+Shift+R", click: () => sendToMain("toggle-read") },
+        { label: "Toggle Sidebar", accelerator: "CmdOrCtrl+\\", click: () => sendToMain("toggle-sidebar") },
+        { label: "Toggle Dark Mode", accelerator: "CmdOrCtrl+Shift+D", click: () => sendToMain("toggle-theme") },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+        { role: "reload" },
+        { role: "toggleDevTools" },
+      ],
+    },
+    {
+      label: "Window",
+      submenu: isMac
+        ? [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }]
+        : [{ role: "minimize" }, { role: "close" }],
+    },
+    {
+      role: "help",
+      label: "Help",
+      submenu: [
+        { label: `${APP_NAME} Help`, click: () => sendToMain("help-note") },
+        { label: "Keyboard Shortcuts", accelerator: "CmdOrCtrl+/", click: () => sendToMain("shortcuts") },
+        { type: "separator" },
+        { label: "Brain on the Web (alexlabs.dev)", click: () => openExternalSafe(SITE_URL) },
+        { label: "Source on GitHub", click: () => openExternalSafe(REPO_URL) },
+        { label: "Release Notes", click: () => openExternalSafe(RELEASES_URL) },
+        { type: "separator" },
+        { label: "Report an Issue…", click: () => openExternalSafe(ISSUES_URL) },
+        { label: `Email ${AUTHOR_NAME}…`, click: () => openExternalSafe(`mailto:${AUTHOR_EMAIL}?subject=${encodeURIComponent(`${APP_NAME} ${app.getVersion()} feedback`)}`) },
+      ],
+    },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow() {
+
   const win = new BrowserWindow({
     width: 1100,
     height: 720,
@@ -905,6 +1045,8 @@ app.whenReady().then(async () => {
   });
 
   await ensureInboxCategory();
+  buildAppMenu();
+
   createWindow();
   startWatcher();
   createCaptureWindow();

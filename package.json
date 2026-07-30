@@ -1,6 +1,11 @@
 {
   "name": "tanstack_start_ts",
-  "version": "0.5.2",
+  "version": "0.5.3",
+  "productName": "Brain",
+  "description": "Brain — local-first Markdown notes for macOS",
+  "author": "Alex Tereshchenko <alex.tereshchenko@gmail.com>",
+  "homepage": "https://alexlabs.dev/",
+
   "private": true,
   "sideEffects": false,
   "type": "module",
