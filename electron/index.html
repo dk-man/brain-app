@@ -2963,7 +2963,106 @@
         }
       }, 30000);
 
+      // ---- Keyboard shortcuts sheet ----
+      const SHORTCUTS = [
+        ["Notes", [
+          ["⌘N", "New note"],
+          ["⌘⇧N", "Quick capture (works from any app)"],
+          ["⌘⌫", "Move note to Trash"],
+          ["⌘⇧T", "Rename note"],
+        ]],
+        ["Navigate", [
+          ["⌘K", "Find in notes"],
+          ["⌘1", "Notes view"],
+          ["⌘2", "Calendar view"],
+          ["⌘\\", "Toggle sidebar"],
+        ]],
+        ["Write", [
+          ["⌘⇧R", "Toggle Edit / Read"],
+          ["- [ ]", "Checkbox — click it in Read mode"],
+          ["[[", "Link to another note"],
+          ["⌘⇧D", "Toggle dark mode"],
+        ]],
+        ["Vault", [
+          ["⌘⇧E", "Export vault as JSON"],
+          ["⌘⇧O", "Reveal vault in Finder"],
+          ["⌘/", "This shortcuts sheet"],
+        ]],
+      ];
+
+      function openShortcuts() {
+        if (document.getElementById("shortcutsOverlay")) return closeShortcuts();
+        const wrap = document.createElement("div");
+        wrap.id = "shortcutsOverlay";
+        wrap.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.28);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:9999;";
+        const sections = SHORTCUTS.map(([title, rows]) => `
+          <div>
+            <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin:0 0 8px 2px;">${title}</div>
+            ${rows.map(([k, d]) => `
+              <div style="display:flex;align-items:center;gap:12px;padding:5px 2px;">
+                <kbd style="min-width:52px;text-align:center;font:500 11px ui-monospace,SFMono-Regular,Menlo,monospace;padding:3px 6px;border-radius:6px;background:var(--bg-elev);border:1px solid var(--border);color:var(--text);">${k}</kbd>
+                <span style="font-size:13px;color:var(--text);">${d}</span>
+              </div>`).join("")}
+          </div>`).join("");
+        wrap.innerHTML = `
+          <div style="width:640px;max-width:92vw;max-height:82vh;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.28);padding:24px 26px;">
+            <div style="font-size:15px;font-weight:600;margin-bottom:18px;">Keyboard Shortcuts</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px 32px;">${sections}</div>
+            <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);">
+              Brain — plain Markdown on your disk. <a href="#" data-ext="https://alexlabs.dev/" style="color:inherit;">alexlabs.dev</a>
+            </div>
+          </div>`;
+        wrap.addEventListener("mousedown", (e) => { if (e.target === wrap) closeShortcuts(); });
+        wrap.querySelectorAll("[data-ext]").forEach(a => {
+          a.onclick = (e) => { e.preventDefault(); window.open(a.dataset.ext, "_blank"); };
+        });
+        document.body.appendChild(wrap);
+      }
+      function closeShortcuts() {
+        document.getElementById("shortcutsOverlay")?.remove();
+      }
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeShortcuts();
+        else if ((e.metaKey || e.ctrlKey) && e.key === "/") { e.preventDefault(); openShortcuts(); }
+      });
+
+      // ---- Native menu actions ----
+      api.onMenu?.(async (action) => {
+        switch (action) {
+          case "new-note": await newNote(); break;
+          case "new-category": openNewCategoryModal(""); break;
+          case "trash-note": if (activeId) await trashNote(activeId); break;
+          case "rename-note": {
+            const t = document.getElementById("titleInput");
+            if (t) { t.focus(); t.select(); }
+            break;
+          }
+          case "export": await doExport(); break;
+          case "import": await doImport(); break;
+          case "reveal-note": await api.reveal(activeId || ""); break;
+          case "search": if (paletteOpen) closePalette(); else await openPalette(); break;
+          case "view-notes": activeView = "notes"; await refresh(); break;
+          case "view-calendar": activeView = "calendar"; await refresh(); break;
+          case "toggle-read": window.__toggleEditorMode?.(); break;
+          case "toggle-sidebar": $("sidebarToggle").click(); break;
+          case "toggle-theme": $("themeToggle").click(); break;
+          case "shortcuts": openShortcuts(); break;
+          case "help-note": {
+            const help = notes.find(n => n.category !== TRASH && /^start here/i.test(n.title))
+              || notes.find(n => n.category !== TRASH);
+            if (help) {
+              activeView = "notes";
+              activeCategory = help.category;
+              activeId = help.relPath;
+              await refresh();
+            }
+            break;
+          }
+        }
+      });
+
       init();
+
     </script>
   </body>
 </html>
