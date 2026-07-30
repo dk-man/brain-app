@@ -8,8 +8,20 @@ const TRASH_SEP = "__";
 const CATEGORIES_FILE = ".categories.json";
 const INBOX = "Inbox";
 
+// App identity / links
+const APP_NAME = "Brain";
+const AUTHOR_NAME = "Alex Tereshchenko";
+const AUTHOR_EMAIL = "alex.tereshchenko@gmail.com";
+const SITE_URL = "https://alexlabs.dev/";
+const REPO_URL = "https://github.com/dk-man/brain-app";
+const RELEASES_URL = "https://github.com/dk-man/brain-app/releases";
+const ISSUES_URL = "https://github.com/dk-man/brain-app/issues";
+
+app.setName(APP_NAME);
+
 // Quick-capture global hotkey. Change here to rebind.
 const QUICK_CAPTURE_HOTKEY = "CommandOrControl+Shift+N";
+
 
 const DEFAULT_CATEGORIES = [
   { id: "Work", name: "Work", color: "#0071e3" },
