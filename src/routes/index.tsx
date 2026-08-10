@@ -277,6 +277,14 @@ function Landing() {
           <a href={GITHUB_URL} className="underline-offset-4 hover:text-foreground hover:underline">
             GitHub
           </a>
+          <span aria-hidden="true">·</span>
+          <a
+            href="https://agent-commons.alexlabs.dev/"
+            className="underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Agent Commons
+          </a>
+
         </footer>
       </div>
     </main>
